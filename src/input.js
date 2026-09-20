@@ -17,3 +17,10 @@ export function isLeftKey(event) {
 export function isRightKey(event) {
   return event.code === 'ArrowRight' || event.code === 'KeyD';
 }
+
+// Space/Enter activate a focused button natively; the global serve handler must
+// not swallow that (or double-fire with it).
+export function isInteractiveTarget(node) {
+  return Boolean(node && typeof node.closest === 'function'
+    && node.closest('button, a[href], input, select, textarea, [contenteditable]'));
+}

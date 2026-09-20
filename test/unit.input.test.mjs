@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isServeKey, isPauseKey, isLeftKey, isRightKey } from '../src/input.js';
+import { isServeKey, isPauseKey, isLeftKey, isRightKey, isInteractiveTarget } from '../src/input.js';
 
 test('serve keys: Space/Enter/NumpadEnter, no auto-repeat', () => {
   assert.equal(isServeKey({ code: 'Space', repeat: false }), true);
@@ -13,6 +13,12 @@ test('serve keys: Space/Enter/NumpadEnter, no auto-repeat', () => {
 test('pause key: Escape only, no auto-repeat', () => {
   assert.equal(isPauseKey({ code: 'Escape', repeat: false }), true);
   assert.equal(isPauseKey({ code: 'Escape', repeat: true }), false);
+});
+
+test('interactive targets are excluded from serve keys', () => {
+  assert.equal(isInteractiveTarget({ closest: () => ({}) }), true);
+  assert.equal(isInteractiveTarget({ closest: () => null }), false);
+  assert.equal(isInteractiveTarget(null), false);
 });
 
 test('paddle keys: arrows and A/D, repeat allowed (held keys)', () => {

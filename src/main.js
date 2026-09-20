@@ -4,7 +4,7 @@ import { createGame, BALL_R, BRICK_D, COLORS, HALF_W, PADDLE_Z } from './game.js
 import { createRenderer } from './gl.js';
 import { lookAt, multiply, perspective } from './math.js';
 import { getStorage, readBest, writeBest } from './storage.js';
-import { isLeftKey, isPauseKey, isRightKey, isServeKey } from './input.js';
+import { isInteractiveTarget, isLeftKey, isPauseKey, isRightKey, isServeKey } from './input.js';
 import { playEndOver, playMiss, playTracking } from './autotest.js';
 
 const BG = [0.027, 0.039, 0.063];
@@ -109,6 +109,8 @@ function start(renderer) {
     bestEl.textContent = String(Math.max(snap.best, snap.score));
     const hideOverlay = snap.state === 'playing' || snap.state === 'life-lost';
     overlay.hidden = hideOverlay;
+    // single source of truth for the toggle state (resume paths included)
+    pauseButton.setAttribute('aria-pressed', String(snap.state === 'paused'));
     if (snap.state === 'paused') {
       overlayTitle.textContent = 'Paused';
       overlayText.textContent = 'Press Esc or the button to resume.';
@@ -156,8 +158,8 @@ function start(renderer) {
 
   const togglePause = () => {
     const snap = game.snapshot();
-    if (snap.state === 'paused') { game.resume(); pauseButton.setAttribute('aria-pressed', 'false'); }
-    else if (snap.state !== 'over') { game.pause(); pauseButton.setAttribute('aria-pressed', 'true'); }
+    if (snap.state === 'paused') game.resume();
+    else if (snap.state !== 'over') game.pause();
     render();
   };
 
@@ -185,7 +187,12 @@ function start(renderer) {
   pauseButton.addEventListener('click', togglePause);
 
   window.addEventListener('keydown', (event) => {
-    if (isServeKey(event)) { event.preventDefault(); primaryAction(); return; }
+    if (isServeKey(event)) {
+      if (isInteractiveTarget(event.target)) return; // let focused buttons activate natively
+      event.preventDefault();
+      primaryAction();
+      return;
+    }
     if (isPauseKey(event)) { togglePause(); return; }
     if (isLeftKey(event)) { held.left = true; return; }
     if (isRightKey(event)) { held.right = true; }
@@ -198,7 +205,6 @@ function start(renderer) {
     if (!document.hidden) return;
     if (game.snapshot().state === 'over') return;
     game.pause();
-    pauseButton.setAttribute('aria-pressed', 'true');
     render();
   });
 

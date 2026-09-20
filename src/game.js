@@ -108,6 +108,21 @@ export function createGame({ best = 0, reduced = false } = {}) {
     return null;
   };
 
+  const clearBrick = (brick) => {
+    brick.alive = false;
+    state.score += SCORE_BRICK;
+    if (bricksLeft() === 0) {
+      state.score += SCORE_LEVEL;
+      state.level += 1;
+      state.speed = Math.min(MAX_SPEED, state.speed + SPEED_STEP);
+      state.bricks = layoutBricks();
+      state.state = 'ready';
+      attachBall();
+      return true;
+    }
+    return false;
+  };
+
   const stepPhysics = (dt) => {
     const ball = state.ball;
     const prevZ = ball.z;
@@ -120,23 +135,21 @@ export function createGame({ best = 0, reduced = false } = {}) {
     if (ball.y > CEILING - BALL_R) { ball.y = CEILING - BALL_R; ball.vy = -Math.abs(ball.vy); }
     else if (ball.y < BALL_R) { ball.y = BALL_R; ball.vy = Math.abs(ball.vy); }
 
-    // swept brick-plane test: prevents tunnelling at max speed
+    // swept brick-plane tests: prevent tunnelling at max speed, from both sides
     if (ball.vz < 0 && prevZ - BALL_R > BRICK_D && ball.z - BALL_R <= BRICK_D) {
       const brick = hitBrick(ball.x, ball.y);
       if (brick) {
-        brick.alive = false;
-        state.score += SCORE_BRICK;
         ball.z = BRICK_D + BALL_R;
         ball.vz = Math.abs(ball.vz);
-        if (bricksLeft() === 0) {
-          state.score += SCORE_LEVEL;
-          state.level += 1;
-          state.speed = Math.min(MAX_SPEED, state.speed + SPEED_STEP);
-          state.bricks = layoutBricks();
-          state.state = 'ready';
-          attachBall();
-          return;
-        }
+        if (clearBrick(brick)) return;
+      }
+    } else if (ball.vz > 0 && prevZ + BALL_R < BRICK_D && ball.z + BALL_R >= BRICK_D) {
+      // returning from the back wall: a live brick still blocks and breaks
+      const brick = hitBrick(ball.x, ball.y);
+      if (brick) {
+        ball.z = BRICK_D - BALL_R;
+        ball.vz = -Math.abs(ball.vz);
+        if (clearBrick(brick)) return;
       }
     }
     if (ball.vz < 0 && ball.z - BALL_R <= 0) { ball.z = BALL_R; ball.vz = Math.abs(ball.vz); }

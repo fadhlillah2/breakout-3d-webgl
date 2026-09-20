@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, BASE_SPEED, SPEED_STEP, MAX_DT, BALL_R, PADDLE_HALF, PADDLE_Z,
+  createGame, BASE_SPEED, SPEED_STEP, MAX_DT, BALL_R, BRICK_D, PADDLE_HALF, PADDLE_Z,
   SCORE_BRICK, SCORE_LEVEL, HALF_W, LIVES, CEILING,
 } from '../src/game.js';
 
@@ -76,6 +76,19 @@ test('brick hit destroys it, scores and reflects vz (swept at max speed)', () =>
   assert.equal(g.snapshot().bricksLeft, 39);
   assert.equal(g.snapshot().score, SCORE_BRICK);
   assert.ok(ball.vz > 0, 'reflected off the brick');
+});
+
+test('back-side brick crossing destroys it and reflects back to the wall', () => {
+  const g = createGame();
+  g.serve();
+  const ball = g.view().ball;
+  const brick = g.view().bricks[0];
+  ball.x = brick.x; ball.y = brick.y; ball.z = 0.1; ball.vx = 0; ball.vy = 0; ball.vz = 8;
+  g.tick(0.01); // satu sub-step: kembali dari dinding belakang menembus bata hidup
+  assert.equal(g.snapshot().bricksLeft, 39);
+  assert.equal(g.snapshot().score, SCORE_BRICK);
+  assert.ok(ball.vz < 0, 'reflected back toward the wall');
+  assert.ok(ball.z < BRICK_D, 'pushed out behind the brick plane');
 });
 
 test('life-lost respawns on the paddle after the timer when lives remain', () => {
