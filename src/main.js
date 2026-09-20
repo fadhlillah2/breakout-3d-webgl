@@ -68,9 +68,9 @@ function start(renderer) {
     renderer.resize(width, height, dpr);
     const vp = multiply(
       perspective(Math.PI / 3.6, width / height, 0.1, 60),
-      lookAt([0, 3.4, 12.0], [0, 2.6, 2.0], [0, 1, 0]),
+      lookAt([0, 3.6, 11.5], [0, 1.8, 1.5], [0, 1, 0]),
     );
-    renderer.setCamera(vp, [0, 3.4, 12.0], BG);
+    renderer.setCamera(vp, [0, 3.6, 11.5], BG);
     renderer.clear();
     renderer.drawCube(0, -0.02, 2.5, 10, 0.04, 9, FLOOR, 1);
     for (const brick of view.bricks) {
@@ -225,7 +225,14 @@ function start(renderer) {
     return;
   }
   if (params.get('shot') === '1') {
-    playTracking(game, { ticks: Number(params.get('ticks')) || 480 });
+    // Pre-roll a few ticks with renders so the ball trail is populated in the
+    // captured frame; the final ball state sits exactly at ?ticks=.
+    const ticks = Number(params.get('ticks')) || 480;
+    playTracking(game, { ticks: Math.max(0, ticks - 15) });
+    for (let i = 0; i < 15; i++) {
+      if (game.snapshot().state === 'playing') game.tick(1 / 60);
+      if (i % 3 === 2) render();
+    }
     body.classList.add('shot');
     overlay.hidden = true;
     render();
