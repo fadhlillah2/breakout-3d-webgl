@@ -14,10 +14,10 @@ export const PADDLE_Y = 0.4;
 export const PADDLE_H = 0.3;
 export const PADDLE_Z = 6.0;
 export const PADDLE_HALF = 0.8;
-export const PADDLE_SPEED = 7.0;
+export const PADDLE_SPEED = 9.0;
 export const BASE_SPEED = 4.2;
 export const SPEED_STEP = 0.4;
-export const MAX_SPEED = 8.0;
+export const MAX_SPEED = 7.0;
 export const MAX_DT = 0.05;
 export const SUB_DT = 0.02;
 export const MIN_VX = 1.2;
@@ -110,6 +110,19 @@ export function createGame({ best = 0 } = {}) {
 
   const nudgePaddle = (dir, dt) => setPaddle(state.paddleX + dir * PADDLE_SPEED * dt);
 
+  // Arcade guard: after any bounce keep a minimum horizontal component, so the
+  // ball always sweeps across columns instead of stalling in a vertical line.
+  // Speed is preserved; only the angle is clamped.
+  const clampAngle = () => {
+    const ball = state.ball;
+    const speed = Math.hypot(ball.vx, ball.vy) || state.speed;
+    if (Math.abs(ball.vx) >= MIN_VX) return;
+    const sign = ball.vx !== 0 ? Math.sign(ball.vx) : (ball.x >= 0 ? 1 : -1);
+    ball.vx = sign * MIN_VX;
+    const vyMag = Math.sqrt(Math.max(0, speed * speed - MIN_VX * MIN_VX));
+    ball.vy = (ball.vy >= 0 ? 1 : -1) * vyMag;
+  };
+
   const clearBrick = (brick) => {
     brick.alive = false;
     state.score += SCORE_BRICK;
@@ -134,29 +147,44 @@ export function createGame({ best = 0 } = {}) {
     else if (ball.x > HALF_W - BALL_R) { ball.x = HALF_W - BALL_R; ball.vx = -Math.abs(ball.vx); }
     if (ball.y > CEILING - BALL_R) { ball.y = CEILING - BALL_R; ball.vy = -Math.abs(ball.vy); }
 
-    // Brick collision on the play plane: pick the deepest overlap, resolve on
-    // its shallowest axis so the ball leaves through the face it entered.
+    // Brick collision: exact circle-vs-rect contact, reflected about the
+    // contact normal. Unlike an inflated-box test, a ball only hits a brick it
+    // actually touches, so grazing the seam between two bricks never removes
+    // one from a distance.
     let hit = null;
-    let deepest = 0;
+    let bestDist = Infinity;
     for (const brick of state.bricks) {
       if (!brick.alive) continue;
-      const dx = brick.w / 2 + BALL_R - Math.abs(ball.x - brick.x);
-      const dy = brick.h / 2 + BALL_R - Math.abs(ball.y - brick.y);
-      if (dx <= 0 || dy <= 0) continue;
-      const depth = Math.min(dx, dy);
-      if (depth > deepest) { deepest = depth; hit = { brick, dx, dy }; }
+      const cx = Math.max(brick.x - brick.w / 2, Math.min(ball.x, brick.x + brick.w / 2));
+      const cy = Math.max(brick.y - brick.h / 2, Math.min(ball.y, brick.y + brick.h / 2));
+      const nx = ball.x - cx;
+      const ny = ball.y - cy;
+      const dist = Math.hypot(nx, ny);
+      if (dist >= BALL_R) continue;
+      if (dist < bestDist) { bestDist = dist; hit = { brick, nx, ny, dist }; }
     }
     if (hit) {
-      const { brick, dx, dy } = hit;
-      if (dx < dy) {
-        const sign = ball.x >= brick.x ? 1 : -1;
-        ball.x = brick.x + sign * (brick.w / 2 + BALL_R);
-        ball.vx = sign * Math.abs(ball.vx);
+      const { brick, nx, ny, dist } = hit;
+      let ux, uy, push;
+      if (dist > 1e-9) {
+        ux = nx / dist;
+        uy = ny / dist;
+        push = BALL_R - dist;
       } else {
-        const sign = ball.y >= brick.y ? 1 : -1;
-        ball.y = brick.y + sign * (brick.h / 2 + BALL_R);
-        ball.vy = sign * Math.abs(ball.vy);
+        // centre inside the rect: leave along the shallowest face
+        const ox = brick.w / 2 - Math.abs(ball.x - brick.x);
+        const oy = brick.h / 2 - Math.abs(ball.y - brick.y);
+        if (ox < oy) { ux = ball.x >= brick.x ? 1 : -1; uy = 0; push = ox + BALL_R; }
+        else { ux = 0; uy = ball.y >= brick.y ? 1 : -1; push = oy + BALL_R; }
       }
+      ball.x += ux * push;
+      ball.y += uy * push;
+      const dot = ball.vx * ux + ball.vy * uy;
+      if (dot < 0) {
+        ball.vx -= 2 * dot * ux;
+        ball.vy -= 2 * dot * uy;
+      }
+      clampAngle();
       if (clearBrick(brick)) return;
     }
 
@@ -169,13 +197,11 @@ export function createGame({ best = 0 } = {}) {
       const offset = (ball.x - state.paddleX) / PADDLE_HALF;
       ball.y = paddleTop() + BALL_R;
       ball.vy = Math.abs(ball.vy);
-      let vx = Math.max(-1, Math.min(1, offset)) * 3.2;
-      if (Math.abs(vx) < MIN_VX) {
-        vx = (vx !== 0 ? Math.sign(vx) : (offset >= 0 ? 1 : -1)) * MIN_VX;
-      }
-      const dir = normalize2([vx, ball.vy]);
+      ball.vx = Math.max(-1, Math.min(1, offset)) * 3.2;
+      const dir = normalize2([ball.vx, ball.vy]);
       ball.vx = dir[0] * state.speed;
       ball.vy = dir[1] * state.speed;
+      clampAngle();
       return;
     }
 
@@ -211,7 +237,10 @@ export function createGame({ best = 0 } = {}) {
       }
       return;
     }
-    const n = Math.max(1, Math.ceil(d / SUB_DT));
+    // Adaptive sub-stepping: never advance more than half a ball radius per
+    // step, so fast balls cannot skip a brick face or a paddle catch window.
+    const speed = Math.hypot(state.ball.vx, state.ball.vy);
+    const n = Math.min(16, Math.max(1, Math.ceil((d * speed) / (BALL_R * 0.5))));
     const sub = d / n;
     for (let i = 0; i < n && state.state === 'playing'; i++) stepPhysics(sub);
   };

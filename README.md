@@ -15,7 +15,8 @@ No engine, no framework, no runtime dependencies — plain ES modules and GLSL.
 ## Rules
 
 - 3 lives; losing the ball behind the paddle costs one.
-- Clearing all bricks starts the next level 0.4 units/s faster (cap 8.0).
+- Clearing all bricks starts the next level 0.4 units/s faster (cap 7.0; the
+  paddle moves at 9.0 so it can always chase the ball).
 - 10 points per brick, 100 per cleared level; best score in localStorage.
 
 ## Run locally
@@ -39,9 +40,10 @@ live `?shot=1` scene (with an anti-fabrication DOM guard).
 ## How it works
 
 - `src/game.js` — DOM-free arena on a classic breakout play plane at a fixed
-  depth: sub-stepped physics (≤0.02 s), deepest-overlap brick resolution along
-  the shallowest axis, and a minimum horizontal component after every paddle
-  return so the ball can never lock into a vertical loop.
+  depth: adaptive sub-stepping (never more than half a ball radius per step),
+  exact circle-vs-rect brick contact reflected about the contact normal, and a
+  minimum horizontal component after every bounce so the ball can never lock
+  into a vertical loop.
 - `src/gl.js` + `src/cube.js` — one shader program, one cube mesh, flat shading,
   distance fog, and a floor grid in the fragment shader (shared with the
   tower-stack-webgl demo).

@@ -97,12 +97,59 @@ test('brick hit from below destroys it, scores and flips vy (no tunnelling)', ()
 test('brick hit from the side flips vx and destroys the brick', () => {
   const g = createGame();
   g.serve();
+  g.view().bricks[0].alive = false; // isolate the left face under test
   const ball = g.view().ball;
   const brick = g.view().bricks[1];
   ball.x = brick.x - brick.w / 2 - BALL_R + 0.02; ball.y = brick.y; ball.vx = 8; ball.vy = 0;
   g.tick(0.01);
-  assert.equal(g.snapshot().bricksLeft, 39);
+  assert.equal(g.snapshot().bricksLeft, 38);
   assert.ok(ball.vx < 0, 'reflected back off the left face');
+});
+
+test('corner hit reflects about the brick normal and preserves speed', () => {
+  const g = createGame();
+  g.serve();
+  g.view().bricks[0].alive = false; // isolate all neighbours of the corner under test
+  g.view().bricks[1].alive = false;
+  g.view().bricks[8].alive = false;
+  const ball = g.view().ball;
+  const brick = g.view().bricks[9]; // row 1, col 1 — corner isolated now
+  const off = BALL_R * 0.7;
+  ball.x = brick.x - brick.w / 2 - off;
+  ball.y = brick.y - brick.h / 2 - off;
+  ball.vx = 3; ball.vy = 3;
+  g.tick(0.01);
+  assert.equal(g.snapshot().bricksLeft, 36);
+  assert.ok(ball.vx < 0 && ball.vy < 0, `normal reflection (vx ${ball.vx}, vy ${ball.vy})`);
+  assert.ok(Math.abs(Math.hypot(ball.vx, ball.vy) - Math.hypot(3, 3)) < 1e-9, 'speed preserved');
+});
+
+test('a ball passing just outside the brick corner does not collide', () => {
+  const g = createGame();
+  g.serve();
+  g.view().bricks[0].alive = false;
+  g.view().bricks[1].alive = false;
+  g.view().bricks[8].alive = false;
+  const ball = g.view().ball;
+  const brick = g.view().bricks[9];
+  const off = BALL_R * 1.4;
+  ball.x = brick.x - brick.w / 2 - off;
+  ball.y = brick.y - brick.h / 2 - off;
+  ball.vx = 3; ball.vy = 3;
+  g.tick(0.01);
+  assert.equal(g.snapshot().bricksLeft, 37);
+});
+
+test('a dead-vertical brick bounce still keeps a minimum horizontal component', () => {
+  const g = createGame();
+  g.serve();
+  const ball = g.view().ball;
+  const brick = g.view().bricks[1];
+  ball.x = brick.x; ball.y = brick.y - brick.h / 2 - BALL_R + 0.02; ball.vx = 0; ball.vy = 8;
+  g.tick(0.01);
+  assert.equal(g.snapshot().bricksLeft, 39);
+  assert.ok(Math.abs(ball.vx) >= MIN_VX - 1e-9, `|vx| ${ball.vx} >= ${MIN_VX}`);
+  assert.ok(Math.abs(Math.hypot(ball.vx, ball.vy) - 8) < 1e-9, 'speed preserved');
 });
 
 test('life-lost respawns on the paddle after the timer when lives remain', () => {
