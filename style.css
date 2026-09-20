@@ -36,8 +36,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .stage { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--ink); }
 canvas { display: block; width: 100%; aspect-ratio: 16 / 9; touch-action: none; outline: none; -webkit-tap-highlight-color: transparent; }
 /* Keep the whole stage inside the viewport. Scoped away from shot mode, where
-   the canvas must fill the captured frame — the screenshot gate only checks the
-   PNG size, so a global cap would leave an empty band nobody catches. */
+   the canvas must fill the captured frame: a global cap would still win over
+   the pinned inline height there, and the shot gate would fail on the band. */
 body:not(.shot) canvas { max-height: max(120px, calc(100dvh - 150px)); }
 canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .overlay, .fallback {

@@ -150,8 +150,13 @@ function start(renderer) {
       const glError = renderer.getError();
       if (glError) setStatus('error', `gl 0x${glError.toString(16)}`);
       setStatus('draws', renderer.drawCount);
+      setStatus('grid', renderer.gridCount);
+      setStatus('cracked', renderer.crackCount);
+      // A run that only ever drew one frame cannot prove drawCount is per-frame.
+      setStatus('frames', loopFrames);
       // The size this frame was actually rendered at: the screenshot gate pins
-      // it to the size it asked for, so a stretched frame cannot reach the PNG.
+      // it, so the DOM it inspects cannot describe a different frame than the
+      // one in the file.
       setStatus('frame', `${width}x${height}`);
       setStatus('state', snap.state);
       setStatus('score', snap.score);
@@ -270,11 +275,13 @@ function start(renderer) {
 
   let last = 0;
   let frame = 0;
+  let loopFrames = 0;
   let lostWhileRunning = false;
   const loop = (now) => {
     // Scheduled first: one thrown frame must not kill the loop for good.
     frame = requestAnimationFrame(loop);
     try {
+      loopFrames += 1;
       const dt = last ? Math.min((now - last) / 1000, 0.1) : 0;
       last = now;
       if (held.left) game.nudgePaddle(-1, dt);
@@ -345,7 +352,17 @@ function start(renderer) {
       const value = Number(params.get(name));
       return Number.isFinite(value) && value > 0 ? Math.min(value, 4096) : fallback;
     };
-    render(game.snapshot(), px('w', canvas.clientWidth), px('h', canvas.clientHeight));
+    const w = px('w', canvas.clientWidth);
+    const h = px('h', canvas.clientHeight);
+    // The displayed box is pinned to the same size as the backing store, not
+    // just the render: a stylesheet that shrinks the canvas inside the captured
+    // frame would otherwise put a band of background in the PNG that the guard
+    // never looked at.
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
+    render(game.snapshot(), w, h);
+    const box = canvas.getBoundingClientRect();
+    setStatus('box', `${Math.round(box.left)},${Math.round(box.top)},${Math.round(box.width)},${Math.round(box.height)}`);
     return;
   }
 

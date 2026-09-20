@@ -97,6 +97,8 @@ export function createRenderer(canvas) {
   gl.uniform3f(u.lightDir, 0.4, 0.85, 0.35);
 
   let drawCount = 0;
+  let gridCount = 0;
+  let crackCount = 0;
   let bg = null;
   // Reused translate*scale matrix: the cube is axis-aligned, so the product is
   // closed-form and no per-draw allocation is needed.
@@ -109,6 +111,10 @@ export function createRenderer(canvas) {
     // Draws in the frame currently on screen: clear() starts the count over, so
     // the harnesses can compare it against a count derived from game state.
     get drawCount() { return drawCount; },
+    // Steel and a cracked brick draw the same cube as any other brick, so the
+    // cube count alone cannot tell whether they still take their own branch.
+    get gridCount() { return gridCount; },
+    get crackCount() { return crackCount; },
     resize(cssWidth, cssHeight, dpr = 1) {
       const w = Math.max(1, Math.round(cssWidth * dpr));
       const h = Math.max(1, Math.round(cssHeight * dpr));
@@ -128,6 +134,8 @@ export function createRenderer(canvas) {
     },
     clear() {
       drawCount = 0;
+      gridCount = 0;
+      crackCount = 0;
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     },
     drawCube(x, y, z, sx, sy, sz, color, grid = 0, damage = 0) {
@@ -139,6 +147,8 @@ export function createRenderer(canvas) {
       gl.uniform3f(u.damage, damage, x, y);
       gl.drawElements(gl.TRIANGLES, mesh.count, gl.UNSIGNED_SHORT, 0);
       drawCount += 1;
+      if (grid > 0) gridCount += 1;
+      if (damage > 0) crackCount += 1;
     },
     getError() { return gl.getError(); },
   };

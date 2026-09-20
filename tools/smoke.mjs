@@ -75,15 +75,28 @@ try {
   const deep = await runChrome(CHROME, [...baseFlags, '--window-size=1366,768', '--virtual-time-budget=12000', '--dump-dom', `${base}/?autotest=1&end=deep`]);
   check(!attr(deep, 'error'), `${deepSteel} steel, ${deepCracked} cracked and ${expectedDeep.drops} capsule(s) drawn without error`);
   check(Number(attr(deep, 'draws')) === expectedDraws(deepGame),
-    `deep frame drew ${attr(deep, 'draws')} cubes === ${expectedDraws(deepGame)}, steel and capsule included`);
+    `deep frame drew ${attr(deep, 'draws')} cubes === ${expectedDraws(deepGame)} derived from the state`);
+  // A cube count cannot see which branch drew the cube: steel draws exactly as
+  // many cubes as an ordinary brick would. Steel takes the grid branch (so does
+  // the floor) and a damaged brick takes the crack branch, so each branch gets
+  // its own count derived from the same state.
+  check(Number(attr(deep, 'grid')) === deepSteel + 1,
+    `deep frame drew ${attr(deep, 'grid')} grid cubes === ${deepSteel + 1} (floor + ${deepSteel} steel)`);
+  check(Number(attr(deep, 'cracked')) === deepCracked,
+    `deep frame drew ${attr(deep, 'cracked')} cracked bricks === ${deepCracked}`);
   check(Number(attr(deep, 'level')) === expectedDeep.level, `deep level ${attr(deep, 'level')} === ${expectedDeep.level}`);
   check(Number(attr(deep, 'score')) === expectedDeep.score, `deep score ${attr(deep, 'score')} === ${expectedDeep.score}`);
   check(Number(attr(deep, 'bricks')) === expectedDeep.bricksLeft, `deep bricks ${attr(deep, 'bricks')} === ${expectedDeep.bricksLeft}`);
 
   // The only run whose animation loop really turns: nothing serves, so every
   // frame redraws the same ready board. That makes the per-frame meaning of
-  // data-draws testable — a running total would grow with the frame count.
+  // data-draws testable — a running total would grow with the frame count. How
+  // many loop frames a runner gets is scheduling, not something we pin (2 to 7
+  // here), so it is asserted rather than assumed: with the boot render, one loop
+  // frame already means data-draws was written twice, and a total would read
+  // double. At zero the run is not discriminating and must say so, not pass.
   const idle = await runChrome(CHROME, [...baseFlags, '--window-size=1366,768', '--virtual-time-budget=4000', '--dump-dom', `${base}/?debug=1`]);
+  check(Number(attr(idle, 'frames')) >= 1, `the idle run looped ${attr(idle, 'frames')} frame(s) past the boot render, so the count below was written more than once`);
   check(Number(attr(idle, 'draws')) === expectedDraws(createGame()),
     `the loop redraws ${attr(idle, 'draws')} cubes per frame === ${expectedDraws(createGame())}, not a running total`);
 

@@ -25,8 +25,9 @@ try {
     '--hide-scrollbars', '--force-device-scale-factor=1', `--window-size=${W},${H}`, '--virtual-time-budget=5000',
   ];
   // Chrome re-layouts the page at the window size when it captures, after the
-  // DOM dump: ?w/?h hand the page that size up front so the frame the guard
-  // reads is the frame in the PNG, at 1:1 instead of stretched to fit.
+  // DOM dump, so the page measured one size for the DOM the guard reads and
+  // another for the pixels: ?w/?h hand it that size up front, and the checks
+  // below pin both the rendered frame and the box it is displayed in.
   const url = `http://127.0.0.1:${port}/?shot=1&ticks=350&w=${W}&h=${H}`;
   const capture = async (name) => {
     const file = join(temp, name);
@@ -34,7 +35,13 @@ try {
     assertShotDom(dom);
     const frame = /data-frame="([^"]*)"/.exec(dom)?.[1];
     if (frame !== `${W}x${H}`) {
-      throw new Error(`the frame was rendered at ${frame ?? 'an unreported size'}, not ${W}x${H}: the PNG would be that frame stretched to fit`);
+      throw new Error(`the frame was rendered at ${frame ?? 'an unreported size'}, not ${W}x${H}: the guard would be vouching for a frame the PNG does not hold`);
+    }
+    // The rendered size is only half of it: a canvas laid out smaller than the
+    // window leaves background in the PNG, at no cost to the size checks.
+    const box = /data-box="([^"]*)"/.exec(dom)?.[1];
+    if (box !== `0,0,${W},${H}`) {
+      throw new Error(`the canvas covers ${box ?? 'an unreported box'}, not all of the ${W}x${H} frame`);
     }
     const bytes = readFileSync(file);
     const signature = [137, 80, 78, 71, 13, 10, 26, 10];
