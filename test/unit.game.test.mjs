@@ -34,7 +34,9 @@ test('initial ready state: 3 lives, 40 bricks, ball attached above the paddle', 
   assert.equal(s.bricksLeft, 40);
   assert.equal(s.level, 1);
   assert.equal(s.speed, BASE_SPEED);
-  assert.ok(s.ball.y > PADDLE_TOP, 'ball sits on the paddle');
+  assert.equal(s.ball.y, PADDLE_TOP + BALL_R, 'ball rests exactly on the paddle top');
+  g.setPaddle(1.5);
+  assert.equal(g.view().ball.y, PADDLE_TOP + BALL_R, 'and stays there while aiming');
 });
 
 test('serve launches the ball upward at the level speed', () => {
@@ -60,20 +62,16 @@ test('side wall and ceiling bounces flip the matching velocity', () => {
 });
 
 test('paddle returns a descending ball and the hit offset steers vx', () => {
-  const g = createGame();
-  g.serve();
-  const ball = g.view().ball;
-  g.setPaddle(0.2);
-  ball.x = 0.6; ball.y = PADDLE_TOP + BALL_R - 0.01; ball.vx = 0; ball.vy = -3;
-  g.tick(0.02);
-  assert.ok(ball.vy > 0, 'vy flips back up');
-  assert.ok(ball.vx > 0, 'right-of-centre hit steers right');
-  assert.ok(Math.abs(Math.hypot(ball.vx, ball.vy) - BASE_SPEED) < 1e-9);
+  const b = paddleBounce({ ballX: 0.6, paddleX: 0.2, vx: 0, vy: -3 });
+  assert.ok(b.vy > 0, 'vy flips back up');
+  assert.ok(b.vx > 0, 'right-of-centre hit steers right');
+  assert.ok(Math.abs(b.speed - BASE_SPEED) < 1e-9);
 });
 
 test('a centred paddle hit leaves at the minimum bounce angle, never straight up', () => {
   const b = paddleBounce({ ballX: 0, paddleX: 0, vx: 0, vy: -4 });
   assert.ok(Math.abs(Math.abs(b.angle) - 16) < 1e-6, `|angle| ${b.angle} === 16`);
+  assert.ok(b.vx > 0, 'dead centre breaks the tie to the right, deterministically');
   assert.ok(b.vy > 0, 'vy flips back up');
   assert.ok(Math.abs(b.speed - BASE_SPEED) < 1e-9, 'speed is the level speed');
 });
@@ -90,6 +88,7 @@ test('the contact offset fans the exit angle from 16 to 60 degrees', () => {
   assert.ok(Math.abs(at(0.5) - 30) < 1e-6, `half-way out -> 30deg (got ${at(0.5)})`);
   assert.ok(Math.abs(at(1) - 60) < 1e-6, `paddle tip -> 60deg (got ${at(1)})`);
   assert.ok(Math.abs(at(-1) + 60) < 1e-6, `left tip -> -60deg (got ${at(-1)})`);
+  assert.ok(Math.abs(at(1.1) - 60) < 1e-6, `past the tip stays clamped (got ${at(1.1)})`);
   // the middle third used to collapse onto one angle; it must steer now
   assert.ok(at(0.34) > at(0.28) && at(0.28) > at(0.0), 'the middle third still steers');
 });

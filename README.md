@@ -54,10 +54,11 @@ live `?shot=1` scene (with an anti-fabrication DOM guard).
 
 ## Limitations
 
-- Gameplay is a classic 2D breakout plane rendered in 3D: the ball travels in
-  x/y at a fixed depth, the brick wall stands behind it, and the paddle only
-  returns balls that reach its own height. There is no depth travel — an earlier
-  fully-3D ball model produced phantom mid-air returns and vertical locks.
+- Gameplay is a classic 2D breakout plane rendered in 3D: ball, paddle and brick
+  wall all travel in x/y at one fixed depth — the depth of each body is
+  render-only — and the paddle only returns balls that reach its own height.
+  There is no depth travel: an earlier fully-3D ball model produced phantom
+  mid-air returns and vertical locks.
 - Bricks are one hit each; no power-ups, audio, accounts, or leaderboard.
 - Requires WebGL2; without it a fallback message is shown.
 - The smoke test runs Chrome with SwiftShader: it verifies correctness, not GPU performance.

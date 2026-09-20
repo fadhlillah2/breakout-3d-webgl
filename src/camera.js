@@ -2,7 +2,9 @@
 // matrix and as the fog origin in the shader — so it must never be written twice.
 import { lookAt, multiply, perspective } from './math.js';
 
-export const EYE = new Float32Array([0, 3.6, 11.5]);
+// Far enough back that the whole arena fits the frame now that the brick wall is
+// drawn on the play plane instead of 5.65 units behind it.
+export const EYE = new Float32Array([0, 3.6, 14.5]);
 const TARGET = [0, 1.8, 1.5];
 const UP = [0, 1, 0];
 const FOV = Math.PI / 3.6;

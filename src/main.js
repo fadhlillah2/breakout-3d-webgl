@@ -1,6 +1,6 @@
 // DOM wiring: canvas, pointer/keyboard input, HUD, and the
 // ?autotest=1 / ?shot=1 / ?nogl=1 modes. The camera lives in camera.js.
-import { createGame, BALL_R, BALL_Z, BRICK_D, COLORS, HALF_W, PADDLE_H, PADDLE_HALF, PADDLE_Y, PADDLE_Z } from './game.js';
+import { createGame, BALL_R, BALL_Z, BRICK_D, COLORS, HALF_W, PADDLE_D, PADDLE_H, PADDLE_HALF, PADDLE_Y, PADDLE_Z } from './game.js';
 import { createRenderer } from './gl.js';
 import { EYE, viewProjection } from './camera.js';
 import { getStorage, readBest, writeBest } from './storage.js';
@@ -10,7 +10,6 @@ import { playEndOver, playMiss, playTracking } from './autotest.js';
 const BG = new Float32Array([0.027, 0.039, 0.063]);
 const FLOOR = new Float32Array([0.07, 0.09, 0.13]);
 const TRAIL = new Float32Array([0.2, 0.55, 0.5]);
-const PADDLE_D = 0.2;
 const params = new URLSearchParams(location.search);
 const body = document.body;
 const setStatus = (key, value) => body.setAttribute(`data-${key}`, String(value));
@@ -97,7 +96,8 @@ function start(renderer) {
     renderer.resize(width, height, dpr);
     renderer.setCamera(viewProjection(width / height), EYE, BG);
     renderer.clear();
-    renderer.drawCube(0, -0.02, 2.5, 10, 0.04, 9, FLOOR, 1);
+    // Runs past the camera so the frame never shows the floor slab's near edge.
+    renderer.drawCube(0, -0.02, 7, 10, 0.04, 18, FLOOR, 1);
     for (const brick of view.bricks) {
       // On the play plane, not 5.65 units behind it: a brick may only break
       // where the ball is seen to touch it.
@@ -107,7 +107,7 @@ function start(renderer) {
     renderer.drawCube(view.paddleX, PADDLE_Y, PADDLE_Z + PADDLE_D / 2, PADDLE_HALF * 2, PADDLE_H, PADDLE_D, COLORS[0]);
     const ball = view.ball;
     // A lost ball stops being drawn at the floor instead of sinking through it.
-    if (ball && ball.y >= 0) {
+    if (ball && ball.y >= BALL_R) {
       for (let i = 1; i < trail.length; i++) {
         const s = BALL_R * 2 * (1 - i / 9);
         renderer.drawCube(trail[i].x, trail[i].y, trail[i].z, s, s, s, TRAIL);

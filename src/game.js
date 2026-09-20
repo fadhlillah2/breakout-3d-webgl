@@ -2,7 +2,8 @@
 // the browser smoke test, and the screenshot tool all drive the same code.
 //
 // Gameplay is a classic breakout plane (x/y) at a fixed depth, rendered in 3D:
-// the ball and paddle live on the play plane, the brick wall stands behind them.
+// ball, paddle and brick wall all sit on that one play plane — the depth of each
+// body is render-only.
 // That keeps every bounce physical — the paddle only returns balls that reach
 // its own height — and avoids the depth-travel artefacts of a fully 3D ball.
 
@@ -14,6 +15,7 @@ export const PADDLE_Y = 0.4;
 export const PADDLE_H = 0.3;
 export const PADDLE_Z = 6.0;
 export const PADDLE_HALF = 0.8;
+export const PADDLE_D = 0.2;
 export const PADDLE_SPEED = 9.0;
 export const BASE_SPEED = 4.2;
 export const SPEED_STEP = 0.4;
@@ -122,7 +124,7 @@ export function createGame({ best = 0 } = {}) {
 
   const nudgePaddle = (dir, dt) => setPaddle(state.paddleX + dir * PADDLE_SPEED * dt);
 
-  // Arcade guard for brick and wall bounces: keep both components off zero, so
+  // Arcade guard for brick bounces: keep both components off zero, so
   // the ball neither stalls in a vertical line nor crawls along a horizontal
   // one. Speed is preserved; only the angle is clamped. The paddle does not use
   // this — its exit angle is set outright from the contact offset.
