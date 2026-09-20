@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Breakout 3D — hand-written WebGL2</title>
+<meta name="description" content="A 3D brick breaker rendered by a small hand-written WebGL2 pipeline. No engine, no runtime dependencies.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="shell">
+  <header class="hud">
+    <p class="hud-item">Score <strong id="score">0</strong></p>
+    <p class="hud-item">Lives <strong id="lives">3</strong></p>
+    <p class="hud-item">Level <strong id="level">1</strong></p>
+    <p class="hud-item">Best <strong id="best">0</strong></p>
+    <button id="pause" type="button" aria-pressed="false">Pause</button>
+  </header>
+  <div class="stage">
+    <canvas id="game" width="800" height="450" tabindex="0"
+      aria-label="Breakout 3D game. Move the paddle with the mouse or arrow keys; press Space or click to serve."></canvas>
+    <div id="overlay" class="overlay">
+      <h1 id="overlay-title">Breakout 3D</h1>
+      <p id="overlay-text">Move with the mouse or ← → · press Space or click to serve.</p>
+      <button id="overlay-button" type="button">Serve</button>
+    </div>
+    <div id="fallback" class="fallback" hidden>
+      <h1>Breakout 3D</h1>
+      <p>This game needs WebGL2, which this browser did not provide.</p>
+      <p><a href="https://github.com/fadhlillah2/breakout-3d-webgl">Source and screenshots on GitHub</a></p>
+    </div>
+  </div>
+  <p class="hint">Mouse / ← → = move &middot; Space / click = serve &middot; Esc = pause</p>
+  <p class="status" id="announce" role="status" aria-live="polite"></p>
+</main>
+<noscript><p>This game requires JavaScript.</p></noscript>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
