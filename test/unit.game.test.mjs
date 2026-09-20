@@ -152,6 +152,19 @@ test('a dead-vertical brick bounce still keeps a minimum horizontal component', 
   assert.ok(Math.abs(Math.hypot(ball.vx, ball.vy) - 8) < 1e-9, 'speed preserved');
 });
 
+test('a ball slipping below the paddle top cannot be caught from the side', () => {
+  const g = createGame();
+  g.serve();
+  const ball = g.view().ball;
+  g.setPaddle(0);
+  ball.x = 0.3; ball.y = PADDLE_Y + 0.02; ball.vx = 0; ball.vy = -2;
+  g.tick(1 / 60);
+  assert.equal(g.snapshot().state, 'playing', 'no sideways pop-up');
+  for (let i = 0; i < 30 && g.snapshot().state === 'playing'; i++) g.tick(1 / 60);
+  assert.equal(g.snapshot().state, 'life-lost');
+  assert.equal(g.snapshot().lives, LIVES - 1);
+});
+
 test('life-lost respawns on the paddle after the timer when lives remain', () => {
   const g = createGame();
   g.serve();

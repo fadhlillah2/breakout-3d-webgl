@@ -188,11 +188,12 @@ export function createGame({ best = 0 } = {}) {
       if (clearBrick(brick)) return;
     }
 
-    // Paddle: only a descending ball that reaches the paddle's own height and
-    // x-range is returned; anything else falls past it and is lost.
+    // Paddle: only a descending ball arriving from above the paddle top, inside
+    // its x-range, is returned. A ball that slips below the top is lost — no
+    // sideways pop-up.
     if (ball.vy < 0
-      && ball.y - BALL_R <= paddleTop()
-      && ball.y + BALL_R >= PADDLE_Y
+      && ball.y <= paddleTop() + BALL_R
+      && ball.y >= paddleTop()
       && Math.abs(ball.x - state.paddleX) <= PADDLE_HALF + BALL_R) {
       const offset = (ball.x - state.paddleX) / PADDLE_HALF;
       ball.y = paddleTop() + BALL_R;

@@ -34,6 +34,8 @@ setStatus('reduced', reduced ? '1' : '0');
 
 const storage = getStorage();
 const game = createGame({ best: readBest(storage), reduced });
+// QA hook: ?debug=1 exposes the live game object for scripted playthroughs.
+if (params.get('debug') === '1') window.__game = game;
 
 if (params.get('nogl') === '1') {
   showFallback('forced');
