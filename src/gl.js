@@ -26,6 +26,8 @@ uniform vec3 uLightDir;
 uniform vec3 uCamPos;
 uniform vec3 uBg;
 uniform float uGrid;
+// x = damage 0..1, yz = the brick's centre in world space.
+uniform vec3 uDamage;
 out vec4 outColor;
 void main() {
   vec3 n = normalize(vNormal);
@@ -34,6 +36,13 @@ void main() {
   vec2 g = abs(fract(vWorld.xz) - 0.5);
   float edge = smoothstep(0.455, 0.5, max(g.x, g.y));
   base = mix(base, uColor * 1.7, edge * uGrid * 0.5);
+  if (uDamage.x > 0.0) {
+    // Twelve procedural cracks radiating from the brick centre; no texture.
+    vec2 p = vWorld.xy - uDamage.yz;
+    float spoke = abs(fract(atan(p.y, p.x) * 1.9099 + 0.37) - 0.5);
+    float crack = smoothstep(0.055, 0.0, spoke) * smoothstep(0.32, 0.05, length(p));
+    base = mix(base, base * 0.22, crack * uDamage.x);
+  }
   float fog = 1.0 - exp(-length(vWorld - uCamPos) * 0.055);
   outColor = vec4(mix(base, uBg, clamp(fog, 0.0, 0.85)), 1.0);
 }`;
@@ -76,6 +85,7 @@ export function createRenderer(canvas) {
     camPos: gl.getUniformLocation(program, 'uCamPos'),
     bg: gl.getUniformLocation(program, 'uBg'),
     grid: gl.getUniformLocation(program, 'uGrid'),
+    damage: gl.getUniformLocation(program, 'uDamage'),
   };
   gl.enable(gl.DEPTH_TEST);
   gl.enable(gl.CULL_FACE);
@@ -115,12 +125,13 @@ export function createRenderer(canvas) {
     clear() {
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     },
-    drawCube(x, y, z, sx, sy, sz, color, grid = 0) {
+    drawCube(x, y, z, sx, sy, sz, color, grid = 0, damage = 0) {
       model[0] = sx; model[5] = sy; model[10] = sz;
       model[12] = x; model[13] = y; model[14] = z;
       gl.uniformMatrix4fv(u.model, false, model);
       gl.uniform3fv(u.color, color);
       gl.uniform1f(u.grid, grid);
+      gl.uniform3f(u.damage, damage, x, y);
       gl.drawElements(gl.TRIANGLES, mesh.count, gl.UNSIGNED_SHORT, 0);
       drawCount += 1;
     },

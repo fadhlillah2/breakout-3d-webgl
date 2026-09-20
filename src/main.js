@@ -1,15 +1,16 @@
 // DOM wiring: canvas, pointer/keyboard input, HUD, and the
 // ?autotest=1 / ?shot=1 / ?nogl=1 modes. The camera lives in camera.js.
-import { createGame, BALL_R, BALL_Z, BRICK_D, COLORS, HALF_W, PADDLE_D, PADDLE_H, PADDLE_HALF, PADDLE_Y, PADDLE_Z } from './game.js';
+import {
+  createGame, levelPalette, BALL_COLOR, BALL_R, BALL_Z, BG_COLOR, BRICK_D, DROP_COLORS, DROP_H,
+  DROP_W, FLOOR_COLOR, HALF_W, PADDLE_COLOR, PADDLE_D, PADDLE_H, PADDLE_Y, PADDLE_Z, STEEL_COLOR,
+  TRAIL_COLOR,
+} from './game.js';
 import { createRenderer } from './gl.js';
 import { EYE, viewProjection } from './camera.js';
 import { getStorage, readBest, writeBest } from './storage.js';
 import { isInteractiveTarget, isLeftKey, isPauseKey, isRightKey, isServeKey } from './input.js';
 import { playEndOver, playMiss, playTracking } from './autotest.js';
 
-const BG = new Float32Array([0.027, 0.039, 0.063]);
-const FLOOR = new Float32Array([0.07, 0.09, 0.13]);
-const TRAIL = new Float32Array([0.2, 0.55, 0.5]);
 const params = new URLSearchParams(location.search);
 const body = document.body;
 const setStatus = (key, value) => body.setAttribute(`data-${key}`, String(value));
@@ -84,6 +85,14 @@ function start(renderer) {
     if (trail.length > 6) trail.length = 6;
   };
 
+  // Reused so a damaged brick can darken without allocating a colour per draw.
+  const tint = new Float32Array(3);
+  const damaged = (color, damage) => {
+    const k = 1 - 0.45 * damage;
+    tint[0] = color[0] * k; tint[1] = color[1] * k; tint[2] = color[2] * k;
+    return tint;
+  };
+
   const render = (snap = game.snapshot()) => {
     updateHud(snap);
     const width = canvas.clientWidth;
@@ -94,25 +103,40 @@ function start(renderer) {
     const view = game.view();
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     renderer.resize(width, height, dpr);
-    renderer.setCamera(viewProjection(width / height), EYE, BG);
+    renderer.setCamera(viewProjection(width / height), EYE, BG_COLOR);
     renderer.clear();
     // Runs past the camera so the frame never shows the floor slab's near edge.
-    renderer.drawCube(0, -0.02, 7, 10, 0.04, 18, FLOOR, 1);
+    renderer.drawCube(0, -0.02, 7, 10, 0.04, 18, FLOOR_COLOR, 1);
+    const palette = levelPalette(snap.level);
     for (const brick of view.bricks) {
       // On the play plane, not 5.65 units behind it: a brick may only break
       // where the ball is seen to touch it.
-      if (brick.alive) renderer.drawCube(brick.x, brick.y, BALL_Z, brick.w, brick.h, BRICK_D, COLORS[brick.c]);
+      if (!brick.alive) continue;
+      // Steel gets the world-space grid lines, so it reads as a different
+      // material without a second shader.
+      if (brick.solid) {
+        renderer.drawCube(brick.x, brick.y, BALL_Z, brick.w, brick.h, BRICK_D, STEEL_COLOR, 1);
+        continue;
+      }
+      const damage = 1 - brick.hp / brick.hp0;
+      const color = damage > 0 ? damaged(palette[brick.c], damage) : palette[brick.c];
+      renderer.drawCube(brick.x, brick.y, BALL_Z, brick.w, brick.h, BRICK_D, color, 0, damage);
     }
-    // In front of the ball's depth slab, so paddle and ball never interpenetrate.
-    renderer.drawCube(view.paddleX, PADDLE_Y, PADDLE_Z + PADDLE_D / 2, PADDLE_HALF * 2, PADDLE_H, PADDLE_D, COLORS[0]);
+    for (const drop of view.drops) {
+      renderer.drawCube(drop.x, drop.y, BALL_Z, DROP_W, DROP_H, DROP_H, DROP_COLORS[drop.type]);
+    }
+    // Drawn from the same half-width the physics catches with, so a widened or
+    // shrunken paddle is never a lie on screen. In front of the ball's depth
+    // slab, so paddle and ball never interpenetrate.
+    renderer.drawCube(view.paddleX, PADDLE_Y, PADDLE_Z + PADDLE_D / 2, snap.paddleHalf * 2, PADDLE_H, PADDLE_D, PADDLE_COLOR);
     const ball = view.ball;
     // A lost ball stops being drawn at the floor instead of sinking through it.
     if (ball && ball.y >= BALL_R) {
       for (let i = 1; i < trail.length; i++) {
         const s = BALL_R * 2 * (1 - i / 9);
-        renderer.drawCube(trail[i].x, trail[i].y, trail[i].z, s, s, s, TRAIL);
+        renderer.drawCube(trail[i].x, trail[i].y, trail[i].z, s, s, s, TRAIL_COLOR);
       }
-      renderer.drawCube(ball.x, ball.y, ball.z, BALL_R * 2, BALL_R * 2, BALL_R * 2, COLORS[2]);
+      renderer.drawCube(ball.x, ball.y, ball.z, BALL_R * 2, BALL_R * 2, BALL_R * 2, BALL_COLOR);
     }
     if (QA) {
       const glError = renderer.getError();

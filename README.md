@@ -15,9 +15,19 @@ No engine, no framework, no runtime dependencies — plain ES modules and GLSL.
 ## Rules
 
 - 3 lives; losing the ball behind the paddle costs one.
-- Clearing all bricks starts the next level 0.4 units/s faster (cap 7.0; the
-  paddle moves at 9.0 so it can always chase the ball).
-- 10 points per brick, 100 per cleared level; best score in localStorage.
+- Each level draws its wall from an ASCII pattern: bricks take one to three
+  hits (the colour is the toughness, and cracks are drawn in the fragment
+  shader), and steel bricks never break.
+- Breaking a brick can drop a capsule — a wider paddle for 8 s, or a ball
+  slowed to 75 % for 6 s. Which brick drops what is a hash of the level and the
+  brick's slot, so a replay never diverges.
+- A level ends when two breakable bricks are left, so it never turns into a hunt
+  for stragglers; the survivors are paid for at the full brick price. The next
+  level runs 0.4 units/s faster (cap 7.0; the paddle moves at 9.0 so it can
+  always chase the ball), with a slightly narrower paddle (floor 0.5) and a
+  different serve angle and palette.
+- 5 points per non-fatal hit, 10 per brick broken, 100 per cleared level; best
+  score in localStorage.
 
 ## Run locally
 
@@ -45,11 +55,13 @@ live `?shot=1` scene (with an anti-fabrication DOM guard).
   depth: adaptive sub-stepping (never more than half a ball radius per step),
   exact circle-vs-rect brick contact reflected about the contact normal, and a
   minimum horizontal component after every bounce so the ball can never lock
-  into a vertical loop.
+  into a vertical loop. Level layouts, capsule drops and serve angles all come
+  from a small integer hash of the game state, so there is no RNG anywhere and
+  the same ticks always replay the same game.
 - `src/gl.js` + `src/cube.js` — one shader program, one cube mesh, flat shading,
   distance fog, and a floor grid in the fragment shader (shared with the
   tower-stack-webgl demo).
-- `src/main.js` — DOM wiring, pointer/keyboard input, static camera, HUD, and the
+- `src/main.js` — DOM wiring, pointer/keyboard input, HUD, and the
   `?autotest=1`, `?shot=1`, `?nogl=1` modes used by the tooling.
 
 ## Limitations
@@ -59,7 +71,7 @@ live `?shot=1` scene (with an anti-fabrication DOM guard).
   render-only — and the paddle only returns balls that reach its own height.
   There is no depth travel: an earlier fully-3D ball model produced phantom
   mid-air returns and vertical locks.
-- Bricks are one hit each; no power-ups, audio, accounts, or leaderboard.
+- Two capsule types only; no audio, accounts, or leaderboard.
 - Requires WebGL2; without it a fallback message is shown.
 - The smoke test runs Chrome with SwiftShader: it verifies correctness, not GPU performance.
 

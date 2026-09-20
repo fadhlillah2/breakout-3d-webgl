@@ -3,7 +3,22 @@ import assert from 'node:assert/strict';
 import {
   createGame, BASE_SPEED, SPEED_STEP, MAX_DT, BALL_R, PADDLE_HALF, PADDLE_Y, PADDLE_H,
   SCORE_BRICK, SCORE_LEVEL, HALF_W, LIVES, CEILING, MIN_VX, MIN_VY, LOST_Y,
+  CLEAR_THRESHOLD, parsePattern, patternFor,
 } from '../src/game.js';
+
+// The wall is a pattern now, so a fixed index no longer names a given
+// neighbour: every contact test isolates its own brick instead.
+const targets = (level = 1) => parsePattern(patternFor(level)).filter((b) => !b.solid).length;
+const isolate = (g, index = 0) => {
+  const bricks = g.view().bricks;
+  const target = bricks[index];
+  const dist = (b) => Math.hypot(b.x - target.x, b.y - target.y);
+  const keep = bricks.filter((b) => b !== target).sort((a, b) => dist(b) - dist(a))
+    .slice(0, CLEAR_THRESHOLD + 1);
+  for (const b of bricks) b.alive = b === target || keep.includes(b);
+  for (const b of [target, ...keep]) { b.solid = false; b.hp = 1; b.hp0 = 1; }
+  return target;
+};
 
 const DT = 1 / 60;
 const PADDLE_TOP = PADDLE_Y + PADDLE_H / 2;
@@ -26,12 +41,12 @@ const paddleBounce = ({ ballX, paddleX = 0, vx, vy }) => {
   return { vx: ball.vx, vy: ball.vy, angle: degrees(ball.vx, ball.vy), speed: Math.hypot(ball.vx, ball.vy) };
 };
 
-test('initial ready state: 3 lives, 40 bricks, ball attached above the paddle', () => {
+test('initial ready state: 3 lives, a full wall, ball attached above the paddle', () => {
   const g = createGame();
   const s = g.snapshot();
   assert.equal(s.state, 'ready');
   assert.equal(s.lives, LIVES);
-  assert.equal(s.bricksLeft, 40);
+  assert.equal(s.bricksLeft, targets(1));
   assert.equal(s.level, 1);
   assert.equal(s.speed, BASE_SPEED);
   assert.equal(s.ball.y, PADDLE_TOP + BALL_R, 'ball rests exactly on the paddle top');
@@ -114,11 +129,12 @@ test('edge hit just inside the paddle still returns; just outside falls through'
 test('brick hit from below destroys it, scores and flips vy (no tunnelling)', () => {
   const g = createGame();
   g.serve();
+  const brick = isolate(g);
+  const before = g.snapshot().bricksLeft;
   const ball = g.view().ball;
-  const brick = g.view().bricks[1];
   ball.x = brick.x; ball.y = brick.y - brick.h / 2 - BALL_R + 0.02; ball.vx = 0; ball.vy = 8;
   g.tick(0.01);
-  assert.equal(g.snapshot().bricksLeft, 39);
+  assert.equal(g.snapshot().bricksLeft, before - 1);
   assert.equal(g.snapshot().score, SCORE_BRICK);
   assert.ok(ball.vy < 0, 'reflected downward off the brick underside');
 });
@@ -126,29 +142,27 @@ test('brick hit from below destroys it, scores and flips vy (no tunnelling)', ()
 test('brick hit from the side flips vx and destroys the brick', () => {
   const g = createGame();
   g.serve();
-  g.view().bricks[0].alive = false; // isolate the left face under test
+  const brick = isolate(g);
+  const before = g.snapshot().bricksLeft;
   const ball = g.view().ball;
-  const brick = g.view().bricks[1];
   ball.x = brick.x - brick.w / 2 - BALL_R + 0.02; ball.y = brick.y; ball.vx = 8; ball.vy = 0;
   g.tick(0.01);
-  assert.equal(g.snapshot().bricksLeft, 38);
+  assert.equal(g.snapshot().bricksLeft, before - 1);
   assert.ok(ball.vx < 0, 'reflected back off the left face');
 });
 
 test('corner hit reflects about the brick normal and preserves speed', () => {
   const g = createGame();
   g.serve();
-  g.view().bricks[0].alive = false; // isolate all neighbours of the corner under test
-  g.view().bricks[1].alive = false;
-  g.view().bricks[8].alive = false;
+  const brick = isolate(g);
+  const before = g.snapshot().bricksLeft;
   const ball = g.view().ball;
-  const brick = g.view().bricks[9]; // row 1, col 1 — corner isolated now
   const off = BALL_R * 0.7;
   ball.x = brick.x - brick.w / 2 - off;
   ball.y = brick.y - brick.h / 2 - off;
   ball.vx = 3; ball.vy = 3;
   g.tick(0.01);
-  assert.equal(g.snapshot().bricksLeft, 36);
+  assert.equal(g.snapshot().bricksLeft, before - 1);
   assert.ok(ball.vx < 0 && ball.vy < 0, `normal reflection (vx ${ball.vx}, vy ${ball.vy})`);
   assert.ok(Math.abs(Math.hypot(ball.vx, ball.vy) - Math.hypot(3, 3)) < 1e-9, 'speed preserved');
 });
@@ -156,27 +170,26 @@ test('corner hit reflects about the brick normal and preserves speed', () => {
 test('a ball passing just outside the brick corner does not collide', () => {
   const g = createGame();
   g.serve();
-  g.view().bricks[0].alive = false;
-  g.view().bricks[1].alive = false;
-  g.view().bricks[8].alive = false;
+  const brick = isolate(g);
+  const before = g.snapshot().bricksLeft;
   const ball = g.view().ball;
-  const brick = g.view().bricks[9];
   const off = BALL_R * 1.4;
   ball.x = brick.x - brick.w / 2 - off;
   ball.y = brick.y - brick.h / 2 - off;
   ball.vx = 3; ball.vy = 3;
   g.tick(0.01);
-  assert.equal(g.snapshot().bricksLeft, 37);
+  assert.equal(g.snapshot().bricksLeft, before);
 });
 
 test('a dead-vertical brick bounce still keeps a minimum horizontal component', () => {
   const g = createGame();
   g.serve();
+  const brick = isolate(g);
+  const before = g.snapshot().bricksLeft;
   const ball = g.view().ball;
-  const brick = g.view().bricks[1];
   ball.x = brick.x; ball.y = brick.y - brick.h / 2 - BALL_R + 0.02; ball.vx = 0; ball.vy = 8;
   g.tick(0.01);
-  assert.equal(g.snapshot().bricksLeft, 39);
+  assert.equal(g.snapshot().bricksLeft, before - 1);
   assert.ok(Math.abs(ball.vx) >= MIN_VX - 1e-9, `|vx| ${ball.vx} >= ${MIN_VX}`);
   assert.ok(Math.abs(Math.hypot(ball.vx, ball.vy) - 8) < 1e-9, 'speed preserved');
 });
@@ -230,7 +243,7 @@ test('clearing the last brick starts the next level faster and re-lays bricks', 
   g.serve();
   for (const brick of g.view().bricks) brick.alive = false;
   const last = g.view().bricks[0];
-  last.alive = true;
+  last.alive = true; last.solid = false; last.hp = 1; last.hp0 = 1;
   const ball = g.view().ball;
   ball.x = last.x; ball.y = last.y - last.h / 2 - BALL_R + 0.02; ball.vx = 0; ball.vy = 8;
   const before = g.snapshot().score;
@@ -239,7 +252,7 @@ test('clearing the last brick starts the next level faster and re-lays bricks', 
   assert.equal(s.state, 'ready');
   assert.equal(s.level, 2);
   assert.equal(s.speed, BASE_SPEED + SPEED_STEP);
-  assert.equal(s.bricksLeft, 40);
+  assert.equal(s.bricksLeft, targets(2));
   assert.equal(s.score, before + SCORE_BRICK + SCORE_LEVEL);
 });
 
@@ -348,13 +361,13 @@ test('a non-finite paddle position is ignored, at the root', () => {
 test('a near-horizontal brick bounce is floored in vy, not only in vx', () => {
   const g = createGame();
   g.serve();
-  g.view().bricks[0].alive = false; // isolate the left face under test
+  const brick = isolate(g);
+  const before = g.snapshot().bricksLeft;
   const ball = g.view().ball;
-  const brick = g.view().bricks[1];
   ball.x = brick.x - brick.w / 2 - BALL_R + 0.02; ball.y = brick.y; ball.vx = 4; ball.vy = 0.01;
   const speed = Math.hypot(ball.vx, ball.vy);
   g.tick(0.005);
-  assert.equal(g.snapshot().bricksLeft, 38);
+  assert.equal(g.snapshot().bricksLeft, before - 1);
   assert.ok(Math.abs(ball.vy) >= MIN_VY - 1e-9, `|vy| ${ball.vy} >= ${MIN_VY}`);
   assert.ok(Math.abs(ball.vx) >= MIN_VX - 1e-9, `|vx| ${ball.vx} >= ${MIN_VX}`);
   assert.ok(Math.abs(Math.hypot(ball.vx, ball.vy) - speed) < 1e-9, 'speed preserved');
@@ -382,11 +395,12 @@ test('the brick separation push cannot shove the ball through a side wall', () =
 test('a brick overlapped by a ball moving away from it is not destroyed', () => {
   const g = createGame();
   g.serve();
+  const brick = isolate(g);
+  const before = g.snapshot().bricksLeft;
   const ball = g.view().ball;
-  const brick = g.view().bricks[1];
   ball.x = brick.x; ball.y = brick.y - brick.h / 2 - BALL_R + 0.02; ball.vx = 0; ball.vy = -0.5;
   g.tick(0.002);
-  assert.equal(g.snapshot().bricksLeft, 40, 'no bounce, no kill');
+  assert.equal(g.snapshot().bricksLeft, before, 'no bounce, no kill');
   assert.equal(g.snapshot().score, 0);
   assert.ok(ball.vy < 0, 'velocity untouched, only pushed out');
 });
