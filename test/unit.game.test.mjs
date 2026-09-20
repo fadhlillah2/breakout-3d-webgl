@@ -264,3 +264,41 @@ test('restart resets score/lives/level and keeps best', () => {
   assert.equal(s.score, 0);
   assert.equal(s.best, bestBefore);
 });
+
+test('setPaddle is ignored while paused or over', () => {
+  const g = createGame();
+  g.pause();
+  g.setPaddle(2);
+  assert.equal(g.snapshot().paddleX, 0, 'paused paddle is frozen');
+  g.resume();
+  g.setPaddle(2);
+  assert.equal(g.snapshot().paddleX, 2);
+  for (let guard = 0; guard < 4000 && g.snapshot().state !== 'over'; guard++) {
+    const s = g.snapshot();
+    if (s.state === 'ready') g.serve();
+    if (s.state === 'playing') g.view().ball.x = 3.9; // keep the ball away from the paddle
+    g.tick(DT);
+  }
+  assert.equal(g.snapshot().state, 'over');
+  g.setPaddle(-2);
+  assert.equal(g.snapshot().paddleX, 2, 'game-over paddle is frozen');
+});
+
+test('a non-finite dt cannot poison the ball or the respawn timer', () => {
+  const g = createGame();
+  g.serve();
+  const ball = g.view().ball;
+  const x = ball.x, y = ball.y;
+  g.tick(NaN);
+  g.tick(undefined);
+  assert.equal(ball.x, x);
+  assert.equal(ball.y, y);
+  assert.equal(g.snapshot().state, 'playing');
+  g.setPaddle(-3);
+  ball.x = 3.9; ball.y = PADDLE_TOP + BALL_R - 0.01; ball.vx = 0; ball.vy = -3;
+  for (let i = 0; i < 90 && g.snapshot().state === 'playing'; i++) g.tick(DT);
+  assert.equal(g.snapshot().state, 'life-lost');
+  g.tick(NaN);
+  for (let i = 0; i < 60; i++) g.tick(DT);
+  assert.equal(g.snapshot().state, 'ready', 'a stalled frame must not freeze the respawn');
+});

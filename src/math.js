@@ -34,16 +34,6 @@ export function scaling(x, y, z) {
   return new Float32Array([x, 0, 0, 0, 0, y, 0, 0, 0, 0, z, 0, 0, 0, 0, 1]);
 }
 
-export function rotationX(rad) {
-  const c = Math.cos(rad), s = Math.sin(rad);
-  return new Float32Array([1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]);
-}
-
-export function rotationY(rad) {
-  const c = Math.cos(rad), s = Math.sin(rad);
-  return new Float32Array([c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1]);
-}
-
 export function lookAt(eye, center, up) {
   let zx = eye[0] - center[0], zy = eye[1] - center[1], zz = eye[2] - center[2];
   let len = Math.hypot(zx, zy, zz) || 1;

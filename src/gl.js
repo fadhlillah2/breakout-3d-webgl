@@ -1,7 +1,6 @@
 // Small WebGL2 renderer: one program, one cube mesh, fog + floor grid in the
 // fragment shader. createRenderer never throws — failures are returned as data.
 import { createCubeMesh } from './cube.js';
-import { multiply, translation, scaling } from './math.js';
 
 const VS = `#version 300 es
 precision highp float;
@@ -80,12 +79,17 @@ export function createRenderer(canvas) {
   };
   gl.enable(gl.DEPTH_TEST);
   gl.enable(gl.CULL_FACE);
+  // One program, one mesh: bound for the lifetime of the renderer.
   gl.useProgram(program);
+  gl.bindVertexArray(mesh.vao);
   gl.uniform3f(u.lightDir, 0.4, 0.85, 0.35);
 
   let drawCount = 0;
-  let bg = [0, 0, 0];
-  let eye = [0, 0, 0];
+  let bg = null;
+  // Reused translate*scale matrix: the cube is axis-aligned, so the product is
+  // closed-form and no per-draw allocation is needed.
+  const model = new Float32Array(16);
+  model[15] = 1;
 
   return {
     ok: true,
@@ -98,27 +102,25 @@ export function createRenderer(canvas) {
       gl.viewport(0, 0, w, h);
     },
     setCamera(viewProj, cameraEye, background) {
-      eye = cameraEye;
-      bg = background;
-      gl.useProgram(program);
       gl.uniformMatrix4fv(u.viewProj, false, viewProj);
-      gl.uniform3fv(u.camPos, eye);
-      gl.uniform3fv(u.bg, bg);
+      gl.uniform3fv(u.camPos, cameraEye);
+      if (background !== bg) {
+        bg = background;
+        gl.uniform3fv(u.bg, bg);
+        gl.clearColor(bg[0], bg[1], bg[2], 1);
+      }
     },
     clear() {
-      gl.clearColor(bg[0], bg[1], bg[2], 1);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     },
-    drawCubeModel(model, color, grid = 0) {
+    drawCube(x, y, z, sx, sy, sz, color, grid = 0) {
+      model[0] = sx; model[5] = sy; model[10] = sz;
+      model[12] = x; model[13] = y; model[14] = z;
       gl.uniformMatrix4fv(u.model, false, model);
       gl.uniform3fv(u.color, color);
       gl.uniform1f(u.grid, grid);
-      gl.bindVertexArray(mesh.vao);
       gl.drawElements(gl.TRIANGLES, mesh.count, gl.UNSIGNED_SHORT, 0);
       drawCount += 1;
-    },
-    drawCube(x, y, z, sx, sy, sz, color, grid = 0) {
-      this.drawCubeModel(multiply(translation(x, y, z), scaling(sx, sy, sz)), color, grid);
     },
     getError() { return gl.getError(); },
   };

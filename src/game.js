@@ -30,10 +30,11 @@ export const BRICK_ROWS = 5;
 export const BRICK_W = 0.9;
 export const BRICK_H = 0.5;
 export const BRICK_D = 0.3;
+// Float32Array so uniform3fv uploads them without converting on every draw.
 export const COLORS = [
-  [0.36, 0.88, 0.78], // teal #5ce1c6
-  [0.95, 0.75, 0.47], // amber #f2c078
-  [0.93, 0.95, 0.97], // off-white #eef2f8
+  new Float32Array([0.36, 0.88, 0.78]), // teal #5ce1c6
+  new Float32Array([0.95, 0.75, 0.47]), // amber #f2c078
+  new Float32Array([0.93, 0.95, 0.97]), // off-white #eef2f8
 ];
 
 const SERVE_DIR = [0.26, 0.966];
@@ -99,6 +100,7 @@ export function createGame({ best = 0 } = {}) {
   };
 
   const setPaddle = (x) => {
+    if (state.state === 'paused' || state.state === 'over') return;
     const limit = HALF_W - PADDLE_HALF;
     state.paddleX = Math.max(-limit, Math.min(limit, x));
     if (state.state === 'ready') {
@@ -215,6 +217,7 @@ export function createGame({ best = 0 } = {}) {
   };
 
   const tick = (dt) => {
+    if (!Number.isFinite(dt)) return; // a stalled frame must not poison positions or timers
     const d = Math.min(Math.max(dt, 0), MAX_DT);
     if (state.state === 'paused' || state.state === 'over' || state.state === 'ready') return;
     if (state.state === 'life-lost') {
@@ -271,7 +274,6 @@ export function createGame({ best = 0 } = {}) {
     snapshot() {
       return {
         state: state.state,
-        paused: state.state === 'paused',
         score: state.score,
         best: state.best,
         lives: state.lives,
