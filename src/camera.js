@@ -2,7 +2,7 @@
 // matrix and as the fog origin in the shader — so it must never be written twice.
 import { lookAt, multiply, perspective } from './math.js';
 
-export const EYE = [0, 3.6, 11.5];
+export const EYE = new Float32Array([0, 3.6, 11.5]);
 const TARGET = [0, 1.8, 1.5];
 const UP = [0, 1, 0];
 const FOV = Math.PI / 3.6;

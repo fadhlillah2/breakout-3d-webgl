@@ -104,6 +104,8 @@ export function createRenderer(canvas) {
     setCamera(viewProj, cameraEye, background) {
       gl.uniformMatrix4fv(u.viewProj, false, viewProj);
       gl.uniform3fv(u.camPos, cameraEye);
+      // Compared by identity: pass a new array to change the background, never
+      // mutate this one in place. clear() relies on the clearColor set here.
       if (background !== bg) {
         bg = background;
         gl.uniform3fv(u.bg, bg);

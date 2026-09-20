@@ -302,3 +302,16 @@ test('a non-finite dt cannot poison the ball or the respawn timer', () => {
   for (let i = 0; i < 60; i++) g.tick(DT);
   assert.equal(g.snapshot().state, 'ready', 'a stalled frame must not freeze the respawn');
 });
+
+test('a non-finite paddle position is ignored, at the root', () => {
+  const g = createGame();
+  g.setPaddle(1.2);
+  g.setPaddle(NaN); // a 0x0 canvas makes main.js hand over 0/0
+  assert.equal(g.snapshot().paddleX, 1.2);
+  assert.equal(g.view().ball.x, 1.2, 'the attached ball stays finite too');
+  g.nudgePaddle(1, NaN);
+  assert.equal(g.snapshot().paddleX, 1.2, 'nudgePaddle routes through the same guard');
+  g.serve();
+  g.tick(DT);
+  assert.ok(Number.isFinite(g.view().ball.x), 'play continues from a finite ball');
+});

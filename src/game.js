@@ -100,6 +100,7 @@ export function createGame({ best = 0 } = {}) {
   };
 
   const setPaddle = (x) => {
+    if (!Number.isFinite(x)) return; // one NaN here would poison the paddle and the ball for good
     if (state.state === 'paused' || state.state === 'over') return;
     const limit = HALF_W - PADDLE_HALF;
     state.paddleX = Math.max(-limit, Math.min(limit, x));

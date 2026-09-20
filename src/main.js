@@ -250,7 +250,7 @@ function start(renderer) {
   if (params.get('shot') === '1') {
     // Pre-roll a few ticks with trail samples so the trail is populated in the
     // captured frame; the final ball state sits exactly at ?ticks=.
-    const asked = Number(params.get('ticks') ?? 480);
+    const asked = Number(params.get('ticks') || 480); // '0' is truthy, so ?ticks=0 survives
     // Clamped so a typo cannot hang the tab; 0 stays 0.
     const ticks = Math.min(Math.max(Number.isFinite(asked) ? asked : 480, 0), 5000);
     playTracking(game, { ticks: Math.max(0, ticks - 15) });
