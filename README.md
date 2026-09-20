@@ -36,19 +36,25 @@ No engine, no framework, no runtime dependencies — plain ES modules and GLSL.
 
 ## Tests
 
-    node --test test/*.test.mjs   # pure game/input/storage logic, no browser
-    node tools/smoke.mjs          # Chrome headless + SwiftShader; needs google-chrome
+    npm test                      # node --test: pure game/input/storage logic, no browser
+    npm run smoke                 # Chrome headless + SwiftShader; needs google-chrome
 
 `tools/smoke.mjs` drives the page in `?autotest=1` mode (paddle tracking the ball,
-fixed 60 Hz ticks) and compares the DOM status against the same sequence computed in
-Node; it also checks the miss and game-over scenarios, a deeper run whose frame
-draws a steel brick, a cracked brick and a falling capsule at once, the WebGL2
-fallback (`?nogl=1`), that a pointer over the canvas is not swallowed by the
-ready overlay, and that the stage fits short viewports. Headless Chrome clamps its window to
-500 CSS px wide, so the narrow boot really runs at 500×393, not at phone width.
+fixed 60 Hz ticks) and compares the DOM status — state, score, HUD text and the
+number of cubes the frame drew — against the same sequence computed in Node; it
+also checks the miss and game-over scenarios, a deeper run whose frame draws a
+steel brick, a cracked brick and a falling capsule at once, the WebGL2 fallback
+(`?nogl=1`), that a pointer over the paddle's row is not swallowed by the ready
+overlay, that the stage fits short viewports, that `prefers-reduced-motion` is
+read rather than assumed, and that a full game still ends with localStorage
+blocked. Headless Chrome clamps its window to 500 CSS px wide, so the narrow boot
+really runs at 500×253, not at phone width.
 
 `node scripts/screenshot.mjs` regenerates `screenshots/breakout-3d.png` from the
-live `?shot=1` scene (with an anti-fabrication DOM guard).
+live `?shot=1` scene. One Chrome run produces both the PNG and the DOM the
+anti-fabrication guard inspects (a live context that drew nothing is rejected too),
+and the whole capture runs twice: the two PNGs must be byte-identical, so "the
+shot mode is frozen" is a gate rather than a claim.
 
 ## How it works
 

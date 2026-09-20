@@ -13,6 +13,8 @@ test('readBest: missing, invalid, and throwing storage yield 0', () => {
   assert.equal(readBest({ getItem: () => 'nope' }), 0);
   assert.equal(readBest(null), 0);
   assert.equal(readBest({ getItem: () => '7' }), 7);
+  assert.equal(readBest({ getItem: () => '7.9' }), 7, 'a fractional best is floored, never rounded up');
+  assert.equal(readBest({ getItem: () => '-5' }), 0, 'a negative best is not a best');
 });
 
 test('writeBest never throws on blocked or null storage', () => {

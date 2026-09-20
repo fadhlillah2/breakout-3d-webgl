@@ -4,16 +4,24 @@ on:
   push:
     branches: [main]
   pull_request:
+  # A Chrome-runner regression must be re-testable without inventing a commit.
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # node --test discovers test/*.test.mjs on its own, so a new test file is
+      # picked up here without editing this workflow.
       - name: Unit tests
-        run: node --test test/*.test.mjs
+        run: npm test
       - name: Browser smoke (Chrome headless, preinstalled on ubuntu-latest)
-        run: node tools/smoke.mjs
+        run: npm run smoke

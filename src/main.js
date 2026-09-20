@@ -8,7 +8,7 @@ import {
 import { createRenderer } from './gl.js';
 import { EYE, viewProjection } from './camera.js';
 import { getStorage, readBest, writeBest } from './storage.js';
-import { isInteractiveTarget, isLeftKey, isPauseKey, isRightKey, isServeKey } from './input.js';
+import { isLeftKey, isRightKey, keyAction } from './input.js';
 import { DEEP_TICKS, playEndOver, playMiss, playTracking } from './autotest.js';
 
 const params = new URLSearchParams(location.search);
@@ -66,8 +66,11 @@ function start(renderer) {
   if (QA) {
     // Boot probes for the smoke test, read once while the 'ready' overlay is up:
     // the overlay must not swallow pointer hits, and the stage must be on screen.
+    // The probe sits on the paddle's own row, off the centre line: on a short
+    // viewport the overlay button covers the middle of the canvas, so a centred
+    // probe would report the button and fail for a reason that is not the bug.
     const rect = canvas.getBoundingClientRect();
-    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height * 0.8);
+    const hit = document.elementFromPoint(rect.left + rect.width * 0.12, rect.bottom - 8);
     setStatus('hit', hit === canvas ? 'canvas' : hit?.id || hit?.tagName || 'none');
     setStatus('fit', rect.top >= 0 && rect.bottom <= window.innerHeight ? '1' : '0');
     setStatus('vp', `${window.innerWidth}x${window.innerHeight}`);
@@ -93,13 +96,18 @@ function start(renderer) {
     return tint;
   };
 
-  const render = (snap = game.snapshot()) => {
+  // The frame size is a parameter because shot mode pins it: the capture
+  // re-layouts the page at the harness window size, and a frame measured at load
+  // time would reach the PNG stretched to fit.
+  const render = (snap = game.snapshot(), width = canvas.clientWidth, height = canvas.clientHeight) => {
     updateHud(snap);
-    const width = canvas.clientWidth;
-    const height = canvas.clientHeight;
     // 0x0 = not laid out (hidden tab, display:none, print): the aspect ratio
     // would be NaN and the frame would be thrown away anyway.
-    if (!width || !height) return;
+    if (!width || !height) {
+      // The shot guard reads this: an unlaid-out page must not look like a frame.
+      if (QA) setStatus('draws', 0);
+      return;
+    }
     const view = game.view();
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     renderer.resize(width, height, dpr);
@@ -142,6 +150,9 @@ function start(renderer) {
       const glError = renderer.getError();
       if (glError) setStatus('error', `gl 0x${glError.toString(16)}`);
       setStatus('draws', renderer.drawCount);
+      // The size this frame was actually rendered at: the screenshot gate pins
+      // it to the size it asked for, so a stretched frame cannot reach the PNG.
+      setStatus('frame', `${width}x${height}`);
       setStatus('state', snap.state);
       setStatus('score', snap.score);
       setStatus('lives', snap.lives);
@@ -235,15 +246,10 @@ function start(renderer) {
   pauseButton.addEventListener('click', togglePause);
 
   window.addEventListener('keydown', (event) => {
-    if (isServeKey(event)) {
-      if (isInteractiveTarget(event.target)) return; // let focused buttons activate natively
-      event.preventDefault();
-      primaryAction();
-      return;
-    }
-    if (isPauseKey(event)) { togglePause(); return; }
-    if (isLeftKey(event)) { event.preventDefault(); held.left = true; return; }
-    if (isRightKey(event)) { event.preventDefault(); held.right = true; }
+    const action = keyAction(event); // 'native' = a focused button handles it
+    if (action === 'serve') { event.preventDefault(); primaryAction(); }
+    else if (action === 'pause') togglePause();
+    else if (action === 'left' || action === 'right') { event.preventDefault(); held[action] = true; }
   });
   window.addEventListener('keyup', (event) => {
     if (isLeftKey(event)) held.left = false;
@@ -261,9 +267,6 @@ function start(renderer) {
     game.pause();
     render();
   });
-
-  // render() is idempotent, so a resize can simply redraw the current state.
-  window.addEventListener('resize', () => render());
 
   let last = 0;
   let frame = 0;
@@ -335,10 +338,22 @@ function start(renderer) {
     }
     body.classList.add('shot');
     overlay.hidden = true;
-    render();
+    // Chrome captures the PNG after the DOM is dumped, re-laying out the page at
+    // the window size the harness asked for. Pinning the frame to that size is
+    // what makes the captured pixels the ones the guard just checked.
+    const px = (name, fallback) => {
+      const value = Number(params.get(name));
+      return Number.isFinite(value) && value > 0 ? Math.min(value, 4096) : fallback;
+    };
+    render(game.snapshot(), px('w', canvas.clientWidth), px('h', canvas.clientHeight));
     return;
   }
 
+  // render() is idempotent, so a resize can simply redraw the current state.
+  // Registered only on the interactive path: the deterministic modes have
+  // returned by now, and a capture-time resize must never redraw them behind
+  // the guard's back.
+  window.addEventListener('resize', () => render());
   render();
   frame = requestAnimationFrame(loop);
 }

@@ -106,6 +106,8 @@ export function createRenderer(canvas) {
   return {
     ok: true,
     gl,
+    // Draws in the frame currently on screen: clear() starts the count over, so
+    // the harnesses can compare it against a count derived from game state.
     get drawCount() { return drawCount; },
     resize(cssWidth, cssHeight, dpr = 1) {
       const w = Math.max(1, Math.round(cssWidth * dpr));
@@ -125,6 +127,7 @@ export function createRenderer(canvas) {
       }
     },
     clear() {
+      drawCount = 0;
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     },
     drawCube(x, y, z, sx, sy, sz, color, grid = 0, damage = 0) {

@@ -24,3 +24,13 @@ export function isInteractiveTarget(node) {
   return Boolean(node && typeof node.closest === 'function'
     && node.closest('button, a[href], input, select, textarea, [contenteditable]'));
 }
+
+// What a keydown means, decided here rather than in main.js's listener, so the
+// routing itself is testable without a DOM. 'native' = leave it to the browser.
+export function keyAction(event) {
+  if (isServeKey(event)) return isInteractiveTarget(event.target) ? 'native' : 'serve';
+  if (isPauseKey(event)) return 'pause';
+  if (isLeftKey(event)) return 'left';
+  if (isRightKey(event)) return 'right';
+  return null;
+}

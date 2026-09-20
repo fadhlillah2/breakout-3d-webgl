@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, BASE_SPEED, SPEED_STEP, MAX_DT, BALL_R, PADDLE_HALF, PADDLE_Y, PADDLE_H,
-  SCORE_BRICK, SCORE_LEVEL, HALF_W, LIVES, CEILING, MIN_VX, MIN_VY, LOST_Y,
+  createGame, BASE_SPEED, SPEED_STEP, MAX_DT, MAX_SPEED, BALL_R, PADDLE_HALF, PADDLE_SPEED,
+  PADDLE_Y, PADDLE_H, SCORE_BRICK, SCORE_LEVEL, HALF_W, LIVES, CEILING, MIN_VX, MIN_VY, LOST_Y,
   CLEAR_THRESHOLD, parsePattern, patternFor,
 } from '../src/game.js';
 
@@ -126,7 +126,7 @@ test('edge hit just inside the paddle still returns; just outside falls through'
   assert.equal(g.snapshot().lives, LIVES - 1);
 });
 
-test('brick hit from below destroys it, scores and flips vy (no tunnelling)', () => {
+test('brick hit from below destroys it, scores and flips vy', () => {
   const g = createGame();
   g.serve();
   const brick = isolate(g);
@@ -134,9 +134,26 @@ test('brick hit from below destroys it, scores and flips vy (no tunnelling)', ()
   const ball = g.view().ball;
   ball.x = brick.x; ball.y = brick.y - brick.h / 2 - BALL_R + 0.02; ball.vx = 0; ball.vy = 8;
   g.tick(0.01);
+  assert.equal(brick.alive, false, 'the brick that was aimed at is the one that broke');
   assert.equal(g.snapshot().bricksLeft, before - 1);
   assert.equal(g.snapshot().score, SCORE_BRICK);
   assert.ok(ball.vy < 0, 'reflected downward off the brick underside');
+});
+
+// The sub-stepping claim, gated: one whole step of this shot clears the brick
+// completely, so the brick survives unless the step is subdivided. Asserting the
+// count instead of this brick would pass on a ball that tunnelled into another.
+test('a ball fast enough to jump a brick in one frame still breaks it', () => {
+  const g = createGame();
+  g.serve();
+  const brick = isolate(g);
+  const ball = g.view().ball;
+  const vy = 20;
+  assert.ok(vy * MAX_DT > brick.h + 2 * BALL_R, 'the setup really is a tunnelling shot');
+  ball.x = brick.x; ball.y = brick.y - brick.h / 2 - BALL_R - 0.05; ball.vx = 0; ball.vy = vy;
+  g.tick(MAX_DT);
+  assert.equal(brick.alive, false, 'sub-stepping caught the face it flew through');
+  assert.ok(g.view().ball.vy < 0, 'and reflected it downward');
 });
 
 test('brick hit from the side flips vx and destroys the brick', () => {
@@ -222,8 +239,17 @@ test('life-lost respawns on the paddle after the timer when lives remain', () =>
   assert.ok(s.ball.y > PADDLE_TOP, 'respawned on the paddle');
 });
 
-test('three misses end the game and persist best', () => {
+test('three misses end the game, and the run that scored becomes the best', () => {
   const g = createGame({ best: 0 });
+  // Seeded first: with a score of 0 the old assertion (best === 0) held whether
+  // or not the game promoted the run at all.
+  g.serve();
+  const brick = isolate(g);
+  const shot = g.view().ball;
+  shot.x = brick.x; shot.y = brick.y - brick.h / 2 - BALL_R + 0.02; shot.vx = 0; shot.vy = 8;
+  g.tick(0.01);
+  const scored = g.snapshot().score;
+  assert.equal(scored, SCORE_BRICK, 'the run is on the board before it ends');
   for (let life = 0; life < LIVES; life++) {
     if (g.snapshot().state === 'ready') g.serve();
     const ball = g.view().ball;
@@ -235,7 +261,8 @@ test('three misses end the game and persist best', () => {
   const s = g.snapshot();
   assert.equal(s.state, 'over');
   assert.equal(s.lives, 0);
-  assert.equal(s.best, 0);
+  assert.equal(s.score, scored, 'the score survives the last life');
+  assert.equal(s.best, scored, 'and the finished run is the new best');
 });
 
 test('clearing the last brick starts the next level faster and re-lays bricks', () => {
@@ -400,7 +427,68 @@ test('a brick overlapped by a ball moving away from it is not destroyed', () => 
   const ball = g.view().ball;
   ball.x = brick.x; ball.y = brick.y - brick.h / 2 - BALL_R + 0.02; ball.vx = 0; ball.vy = -0.5;
   g.tick(0.002);
+  assert.equal(brick.alive, true, 'the overlapped brick survives');
   assert.equal(g.snapshot().bricksLeft, before, 'no bounce, no kill');
   assert.equal(g.snapshot().score, 0);
   assert.ok(ball.vy < 0, 'velocity untouched, only pushed out');
+});
+
+test('an overlong frame is clamped to MAX_DT instead of teleporting the ball', () => {
+  const clamped = createGame();
+  clamped.serve();
+  clamped.tick(MAX_DT);
+  const stalled = createGame();
+  stalled.serve();
+  stalled.tick(5);
+  assert.ok(clamped.snapshot().ball.y > createGame().snapshot().ball.y, 'the clamped frame did advance');
+  assert.deepEqual(stalled.snapshot().ball, clamped.snapshot().ball, 'a 5 s stall advances exactly one MAX_DT');
+});
+
+test('the level speed climbs by a step per level and stops at MAX_SPEED', () => {
+  const g = createGame();
+  let previous = g.snapshot().speed;
+  for (let level = 1; level <= 12; level++) {
+    const bricks = g.view().bricks;
+    const target = bricks.find((b) => !b.solid);
+    for (const b of bricks) b.alive = b === target;
+    // Some patterns open with a two- or three-hit brick, so chip until it goes.
+    for (let hit = 0; hit < 4 && g.snapshot().level === level; hit++) {
+      if (g.snapshot().state === 'ready') g.serve();
+      const ball = g.view().ball;
+      ball.x = target.x; ball.y = target.y - target.h / 2 - BALL_R + 0.02; ball.vx = 0; ball.vy = 8;
+      g.tick(0.01);
+    }
+    const speed = g.snapshot().speed;
+    assert.equal(g.snapshot().level, level + 1, `level ${level} cleared`);
+    assert.ok(speed <= MAX_SPEED, `level ${level + 1} runs at ${speed}, under the cap`);
+    assert.ok(speed >= previous, 'the curve never steps back');
+    previous = speed;
+  }
+  assert.equal(previous, MAX_SPEED, 'twelve levels in, the speed sits on the cap');
+});
+
+// Two numbers a player feels but no other test pins: the depth the ball lives
+// at, and the kick that carries a lost ball out of the arena.
+test('the ball stays on the play plane, and a lost ball drops away at a fixed speed', () => {
+  const g = createGame();
+  assert.equal(g.snapshot().ball.z, 5.8, 'the published play plane');
+  g.serve();
+  g.setPaddle(-3);
+  const ball = g.view().ball;
+  ball.x = 3.9; ball.y = PADDLE_TOP + BALL_R - 0.01; ball.vx = 0; ball.vy = -3;
+  for (let i = 0; i < 90 && g.snapshot().state === 'playing'; i++) g.tick(DT);
+  assert.equal(g.snapshot().state, 'life-lost');
+  assert.equal(g.view().ball.vy, -2.4, 'the lost ball is kicked down at a fixed speed');
+  assert.equal(g.snapshot().ball.z, 5.8, 'and never leaves the plane on the way out');
+});
+
+test('nudgePaddle travels at the paddle speed and stops half a paddle short of the wall', () => {
+  const g = createGame();
+  g.nudgePaddle(1, 0.1);
+  assert.ok(Math.abs(g.snapshot().paddleX - PADDLE_SPEED * 0.1) < 1e-9,
+    `one nudge covers speed * dt (got ${g.snapshot().paddleX})`);
+  for (let i = 0; i < 60; i++) g.nudgePaddle(1, 0.1);
+  assert.equal(g.snapshot().paddleX, HALF_W - PADDLE_HALF, 'held right, it parks against the wall');
+  for (let i = 0; i < 120; i++) g.nudgePaddle(-1, 0.1);
+  assert.equal(g.snapshot().paddleX, -(HALF_W - PADDLE_HALF), 'and against the other one');
 });

@@ -49,6 +49,10 @@ export function assertShotDom(dom) {
   if (gl !== 'ok') throw new Error(`shot page is not rendering the game (data-gl=${gl ?? 'missing'})`);
   if (/data-error="/.test(dom)) throw new Error('shot page reported a runtime error');
   if (!/class="[^"]*shot/.test(dom)) throw new Error('shot mode class missing');
+  // A live context that drew nothing still paints an empty canvas, and the size
+  // check downstream would happily accept that PNG.
+  const draws = /data-draws="([^"]*)"/.exec(dom)?.[1];
+  if (!(Number(draws) > 0)) throw new Error(`shot page drew nothing (data-draws=${draws ?? 'missing'})`);
   return true;
 }
 
