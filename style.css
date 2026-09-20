@@ -12,6 +12,8 @@
 }
 * { box-sizing: border-box; margin: 0; }
 html, body { height: 100%; }
+/* No overflow:hidden — on a short viewport the page must still scroll, or the
+   paddle sits below the fold with no way to reach it. */
 body {
   background: var(--ink);
   color: var(--text);
@@ -19,8 +21,8 @@ body {
   display: grid;
   place-items: center;
   min-height: 100dvh;
-  overflow: hidden;
 }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .shell { width: min(980px, 100%); padding: 16px; display: grid; gap: 10px; }
 .hud { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; font-family: var(--mono); font-size: 13px; color: var(--muted); }
 .hud-item strong { color: var(--text); font-size: 15px; }
@@ -30,15 +32,30 @@ body {
   padding: 6px 12px; cursor: pointer;
 }
 .hud button:hover { border-color: var(--accent); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .stage { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--ink); }
-canvas { display: block; width: 100%; aspect-ratio: 16 / 9; touch-action: manipulation; outline: none; }
+canvas { display: block; width: 100%; aspect-ratio: 16 / 9; touch-action: none; outline: none; -webkit-tap-highlight-color: transparent; }
+/* Keep the whole stage inside the viewport. Scoped away from shot mode, where
+   the canvas must fill the captured frame — the screenshot gate only checks the
+   PNG size, so a global cap would leave an empty band nobody catches. */
+body:not(.shot) canvas { max-height: max(120px, calc(100dvh - 150px)); }
 canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .overlay, .fallback {
   position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px;
-  text-align: center; padding: 24px; background: color-mix(in srgb, var(--ink) 72%, transparent);
+  text-align: center; padding: 24px;
+  /* Dark enough to read the text, clear enough at the edges that the 3D scene
+     still reads as an invitation to play. */
+  background: radial-gradient(ellipse 70% 55% at 50% 50%,
+    color-mix(in srgb, var(--ink) 88%, transparent) 0%,
+    color-mix(in srgb, var(--ink) 84%, transparent) 38%,
+    color-mix(in srgb, var(--ink) 26%, transparent) 100%);
 }
+/* The paddle tracks the pointer before the serve, so the overlay must not eat
+   pointer events — only its button does. */
+.overlay { pointer-events: none; }
+.overlay button { pointer-events: auto; }
 .overlay[hidden], .fallback[hidden] { display: none; }
-.overlay h1, .fallback h1 { font-size: clamp(22px, 4vw, 34px); letter-spacing: -0.02em; }
+.overlay h2, .fallback h2 { font-size: clamp(22px, 4vw, 34px); letter-spacing: -0.02em; }
 .overlay p, .fallback p { color: var(--muted); max-width: 44ch; }
 .overlay button {
   font: inherit; font-weight: 600; color: #061018; background: var(--accent);
@@ -47,11 +64,20 @@ canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .overlay button:hover { filter: brightness(1.08); }
 .hint { font-family: var(--mono); font-size: 11.5px; color: var(--muted); text-align: center; }
 .status { font-size: 13px; color: var(--metric); text-align: center; min-height: 1.2em; }
-body.shot .hud, body.shot .hint, body.shot .status, body.shot .overlay { display: none; }
-body.shot { display: block; }
+@media (max-width: 480px) {
+  .hud { gap: 9px; font-size: 11px; }
+  .hud-item strong { font-size: 13px; }
+  .hud button { padding: 6px 10px; }
+  .hint { font-size: 10px; }
+}
+@media (pointer: coarse) {
+  button { min-height: 44px; min-width: 44px; }
+}
+body.shot .hud, body.shot .hint, body.shot .status, body.shot .overlay, body.shot .sr-only { display: none; }
+body.shot { display: block; overflow: hidden; }
 body.shot .shell { width: 100%; padding: 0; gap: 0; }
 body.shot .stage { border: 0; border-radius: 0; }
-body.shot canvas { height: 100dvh; aspect-ratio: auto; }
+body.shot canvas { height: 100dvh; aspect-ratio: auto; max-height: none; }
 @media print {
   body { display: block; }
   canvas, .hud button { display: none; }

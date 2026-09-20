@@ -17,8 +17,6 @@ const setStatus = (key, value) => body.setAttribute(`data-${key}`, String(value)
 // alone costs ~0.5 ms/frame because it flushes the GPU pipeline.
 const QA = params.get('autotest') === '1' || params.get('shot') === '1' || params.get('debug') === '1';
 
-window.addEventListener('error', (event) => setStatus('error', event.message || 'runtime error'));
-
 const canvas = document.getElementById('game');
 const scoreEl = document.getElementById('score');
 const livesEl = document.getElementById('lives');
@@ -64,6 +62,15 @@ function showFallback(reason) {
 
 function start(renderer) {
   setStatus('gl', 'ok');
+  if (QA) {
+    // Boot probes for the smoke test, read once while the 'ready' overlay is up:
+    // the overlay must not swallow pointer hits, and the stage must be on screen.
+    const rect = canvas.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height * 0.8);
+    setStatus('hit', hit === canvas ? 'canvas' : hit?.id || hit?.tagName || 'none');
+    setStatus('fit', rect.top >= 0 && rect.bottom <= window.innerHeight ? '1' : '0');
+    setStatus('vp', `${window.innerWidth}x${window.innerHeight}`);
+  }
   const trail = [];
   const held = { left: false, right: false };
 
@@ -78,10 +85,14 @@ function start(renderer) {
   };
 
   const render = (snap = game.snapshot()) => {
+    updateHud(snap);
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    // 0x0 = not laid out (hidden tab, display:none, print): the aspect ratio
+    // would be NaN and the frame would be thrown away anyway.
+    if (!width || !height) return;
     const view = game.view();
-    const width = canvas.clientWidth || 800;
-    const height = canvas.clientHeight || 450;
-    const dpr = Math.min(window.devicePixelRatio || 1, width < 560 ? 0.75 : 1.5);
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     renderer.resize(width, height, dpr);
     renderer.setCamera(viewProjection(width / height), EYE, BG);
     renderer.clear();
@@ -98,7 +109,6 @@ function start(renderer) {
       }
       renderer.drawCube(ball.x, ball.y, ball.z, BALL_R * 2, BALL_R * 2, BALL_R * 2, COLORS[2]);
     }
-    updateHud(snap);
     if (QA) {
       const glError = renderer.getError();
       if (glError) setStatus('error', `gl 0x${glError.toString(16)}`);
@@ -203,8 +213,8 @@ function start(renderer) {
       return;
     }
     if (isPauseKey(event)) { togglePause(); return; }
-    if (isLeftKey(event)) { held.left = true; return; }
-    if (isRightKey(event)) { held.right = true; }
+    if (isLeftKey(event)) { event.preventDefault(); held.left = true; return; }
+    if (isRightKey(event)) { event.preventDefault(); held.right = true; }
   });
   window.addEventListener('keyup', (event) => {
     if (isLeftKey(event)) held.left = false;
@@ -223,19 +233,54 @@ function start(renderer) {
     render();
   });
 
+  // render() is idempotent, so a resize can simply redraw the current state.
+  window.addEventListener('resize', () => render());
+
   let last = 0;
+  let frame = 0;
+  let lostWhileRunning = false;
   const loop = (now) => {
-    const dt = last ? Math.min((now - last) / 1000, 0.1) : 0;
-    last = now;
-    if (held.left) game.nudgePaddle(-1, dt);
-    if (held.right) game.nudgePaddle(1, dt);
-    game.tick(dt);
-    sampleTrail();
-    const snap = game.snapshot();
-    syncStatus(snap);
-    render(snap);
-    requestAnimationFrame(loop);
+    // Scheduled first: one thrown frame must not kill the loop for good.
+    frame = requestAnimationFrame(loop);
+    try {
+      const dt = last ? Math.min((now - last) / 1000, 0.1) : 0;
+      last = now;
+      if (held.left) game.nudgePaddle(-1, dt);
+      if (held.right) game.nudgePaddle(1, dt);
+      game.tick(dt);
+      sampleTrail();
+      const snap = game.snapshot();
+      syncStatus(snap);
+      render(snap);
+    } catch (error) {
+      setStatus('error', error.message || 'frame error');
+    }
   };
+
+  canvas.addEventListener('webglcontextlost', (event) => {
+    // Without preventDefault the browser never fires webglcontextrestored, and
+    // without stopping the loop the simulation runs on unseen until the lives
+    // are gone.
+    event.preventDefault();
+    lostWhileRunning = frame !== 0;
+    cancelAnimationFrame(frame);
+    frame = 0;
+    const state = game.snapshot().state;
+    if (state === 'playing' || state === 'life-lost') game.pause();
+    setStatus('gl', 'lost');
+    announce.textContent = 'Graphics context lost. Waiting for the browser to restore it.';
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
+    // Every GL object died with the context, so the renderer is rebuilt.
+    const fresh = createRenderer(canvas);
+    if (!fresh.ok) { setStatus('gl', 'error'); setStatus('error', fresh.error); return; }
+    renderer = fresh;
+    setStatus('gl', 'ok');
+    announce.textContent = '';
+    last = 0; // the lost interval must not arrive as one huge dt
+    if (lostWhileRunning) frame = requestAnimationFrame(loop);
+    else render();
+  });
 
   // Deterministic modes (smoke test + screenshot): results pinned.
   if (params.get('autotest') === '1') {
@@ -265,5 +310,5 @@ function start(renderer) {
   }
 
   render();
-  requestAnimationFrame(loop);
+  frame = requestAnimationFrame(loop);
 }

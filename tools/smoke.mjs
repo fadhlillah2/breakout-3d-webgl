@@ -32,6 +32,7 @@ try {
   check(Number(attr(auto, 'lives')) === expected.lives, `lives ${attr(auto, 'lives')} === ${expected.lives}`);
   check(Number(attr(auto, 'level')) === expected.level, `level ${attr(auto, 'level')} === ${expected.level}`);
   check(Number(attr(auto, 'bricks')) === expected.bricksLeft, `bricks ${attr(auto, 'bricks')} === ${expected.bricksLeft}`);
+  check(attr(auto, 'hit') === 'canvas', `pointer hits reach the canvas under the ready overlay (got ${attr(auto, 'hit')})`);
 
   const miss = await runChrome(CHROME, [...baseFlags, '--window-size=1366,768', '--virtual-time-budget=8000', '--dump-dom', `${base}/?autotest=1&end=miss`]);
   check(attr(miss, 'state') === 'ready', `miss run respawns to ready (got ${attr(miss, 'state')})`);
@@ -46,8 +47,14 @@ try {
   check(attr(nogl, 'gl') === 'nogl', 'fallback flag set when WebGL2 is unavailable');
   check(/id="fallback"(?![^>]*hidden)/.test(nogl), 'fallback content visible');
 
-  const small = await runChrome(CHROME, [...baseFlags, '--window-size=320,480', '--virtual-time-budget=8000', '--dump-dom', `${base}/?autotest=1`]);
-  check(attr(small, 'gl') === 'ok' && !attr(small, 'error'), 'boots at 320x480 without error');
+  // Chrome clamps the window to 500 CSS px wide, so the label reports the
+  // viewport the page actually measured instead of the flag we asked for.
+  const small = await runChrome(CHROME, [...baseFlags, '--window-size=500,480', '--virtual-time-budget=8000', '--dump-dom', `${base}/?autotest=1`]);
+  check(attr(small, 'gl') === 'ok' && !attr(small, 'error'), `boots at ${attr(small, 'vp')} without error`);
+  check(attr(small, 'fit') === '1', `stage fits the ${attr(small, 'vp')} viewport`);
+
+  const short = await runChrome(CHROME, [...baseFlags, '--window-size=740,360', '--virtual-time-budget=4000', '--dump-dom', `${base}/?autotest=1`]);
+  check(attr(short, 'fit') === '1', `stage fits the ${attr(short, 'vp')} landscape viewport`);
 } finally {
   server.closeAllConnections?.();
   server.close();

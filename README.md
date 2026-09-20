@@ -32,7 +32,9 @@ No engine, no framework, no runtime dependencies — plain ES modules and GLSL.
 `tools/smoke.mjs` drives the page in `?autotest=1` mode (paddle tracking the ball,
 fixed 60 Hz ticks) and compares the DOM status against the same sequence computed in
 Node; it also checks the miss and game-over scenarios, the WebGL2 fallback
-(`?nogl=1`), and a 320×480 boot.
+(`?nogl=1`), that a pointer over the canvas is not swallowed by the ready overlay,
+and that the stage fits short viewports. Headless Chrome clamps its window to
+500 CSS px wide, so the narrow boot really runs at 500×393, not at phone width.
 
 `node scripts/screenshot.mjs` regenerates `screenshots/breakout-3d.png` from the
 live `?shot=1` scene (with an anti-fabrication DOM guard).

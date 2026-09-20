@@ -9,6 +9,7 @@
 </head>
 <body>
 <main class="shell">
+  <h1 class="sr-only">Breakout 3D</h1>
   <header class="hud">
     <p class="hud-item">Score <strong id="score">0</strong></p>
     <p class="hud-item">Lives <strong id="lives">3</strong></p>
@@ -18,22 +19,32 @@
   </header>
   <div class="stage">
     <canvas id="game" width="800" height="450" tabindex="0"
-      aria-label="Breakout 3D game. Move the paddle with the mouse or arrow keys; press Space or click to serve."></canvas>
+      aria-label="Breakout 3D game. Drag, move the mouse, or use the A/D or arrow keys to move the paddle; tap, click, or press Space to serve."></canvas>
     <div id="overlay" class="overlay">
-      <h1 id="overlay-title">Breakout 3D</h1>
-      <p id="overlay-text">Move with the mouse or ← → · press Space or click to serve.</p>
+      <h2 id="overlay-title">Breakout 3D</h2>
+      <p id="overlay-text">Drag, move the mouse, or use A/D or ← → · tap, click, or press Space to serve.</p>
       <button id="overlay-button" type="button">Serve</button>
     </div>
     <div id="fallback" class="fallback" hidden>
-      <h1>Breakout 3D</h1>
+      <h2>Breakout 3D</h2>
       <p>This game needs WebGL2, which this browser did not provide.</p>
       <p><a href="https://github.com/fadhlillah2/breakout-3d-webgl">Source and screenshots on GitHub</a></p>
     </div>
   </div>
-  <p class="hint">Mouse / ← → = move &middot; Space / click = serve &middot; Esc = pause</p>
+  <p class="hint">Drag, mouse, A/D or ← → = move &middot; tap, click or Space = serve &middot; Esc = pause</p>
   <p class="status" id="announce" role="status" aria-live="polite"></p>
 </main>
-<noscript><p>This game requires JavaScript.</p></noscript>
+<noscript>
+  <style>.overlay { display: none; }</style>
+  <p class="status">This game requires JavaScript.</p>
+</noscript>
+<script>
+// Outside the module on purpose: a module that fails to load or parse never
+// reaches its own handler, and capture also catches failed script loads.
+addEventListener('error', (event) => {
+  document.body.setAttribute('data-error', event.message || 'script load error');
+}, true);
+</script>
 <script type="module" src="src/main.js"></script>
 </body>
 </html>
