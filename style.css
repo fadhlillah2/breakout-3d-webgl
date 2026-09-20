@@ -27,10 +27,12 @@ body {
 .hud { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; font-family: var(--mono); font-size: 13px; color: var(--muted); }
 .hud-item strong { color: var(--text); font-size: 15px; }
 .hud button {
-  margin-left: auto; font: inherit; color: var(--text);
+  font: inherit; color: var(--text);
   background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
   padding: 6px 12px; cursor: pointer;
 }
+/* The first button pushes itself and everything after it to the right edge. */
+.hud #mute { margin-left: auto; }
 .hud button:hover { border-color: var(--accent); }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .stage { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--ink); }
@@ -64,6 +66,26 @@ canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .overlay button:hover { filter: brightness(1.08); }
 .hint { font-family: var(--mono); font-size: 11.5px; color: var(--muted); text-align: center; }
 .status { font-size: 13px; color: var(--metric); text-align: center; min-height: 1.2em; }
+/* Floating score numbers: DOM text over the canvas, positioned from the same
+   projection the scene is drawn with. */
+.pop {
+  position: absolute; transform: translate(-50%, -50%); pointer-events: none;
+  font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--text);
+  text-shadow: 0 1px 6px var(--ink); white-space: nowrap;
+  animation: pop-rise 0.9s ease-out forwards;
+}
+.pop-combo { color: var(--metric); font-size: 19px; }
+.pop-good { color: var(--accent); }
+@keyframes pop-rise {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+  18% { opacity: 1; transform: translate(-50%, -75%) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -190%) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* The number still reports the score; it just stops flying. */
+  .pop { animation: pop-fade 0.9s linear forwards; }
+  @keyframes pop-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+}
 @media (max-width: 480px) {
   .hud { gap: 9px; font-size: 11px; }
   .hud-item strong { font-size: 13px; }

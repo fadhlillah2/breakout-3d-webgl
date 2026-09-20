@@ -26,6 +26,10 @@ uniform vec3 uLightDir;
 uniform vec3 uCamPos;
 uniform vec3 uBg;
 uniform float uGrid;
+// xyz = the ball in world space, w = how brightly it lights the scene.
+uniform vec4 uBall;
+// 0 = lit normally, 1 = glowing with its own colour (the ball, a paddle catch).
+uniform float uEmissive;
 // x = damage 0..1, yz = the brick's centre in world space.
 uniform vec3 uDamage;
 out vec4 outColor;
@@ -45,6 +49,15 @@ void main() {
     float crack = smoothstep(0.055, 0.0, spoke) * smoothstep(0.32, 0.05, length(p));
     base = mix(base, base * 0.22, crack * uDamage.x);
   }
+  // The ball is a moving point light: the cheapest line in the renderer that
+  // makes the scene feel lit rather than painted.
+  vec3 toBall = uBall.xyz - vWorld;
+  float ballDist = length(toBall);
+  float ballLit = max(dot(n, toBall / max(ballDist, 1e-4)), 0.0) / (1.0 + ballDist * ballDist * 0.45);
+  // Half albedo, half white: the glow reads as light on the brick, not as more
+  // brick colour.
+  base += (uColor * 0.5 + 0.5) * ballLit * uBall.w;
+  base = mix(base, uColor * 1.9 + 0.12, uEmissive);
   float fog = 1.0 - exp(-length(vWorld - uCamPos) * 0.055);
   outColor = vec4(mix(base, uBg, clamp(fog, 0.0, 0.85)), 1.0);
 }`;
@@ -88,6 +101,8 @@ export function createRenderer(canvas) {
     bg: gl.getUniformLocation(program, 'uBg'),
     grid: gl.getUniformLocation(program, 'uGrid'),
     damage: gl.getUniformLocation(program, 'uDamage'),
+    ball: gl.getUniformLocation(program, 'uBall'),
+    emissive: gl.getUniformLocation(program, 'uEmissive'),
   };
   gl.enable(gl.DEPTH_TEST);
   gl.enable(gl.CULL_FACE);
@@ -99,7 +114,8 @@ export function createRenderer(canvas) {
   let drawCount = 0;
   let gridCount = 0;
   let crackCount = 0;
-  let bg = null;
+  const bg = new Float32Array(3);
+  let bgSet = false;
   // Reused translate*scale matrix: the cube is axis-aligned, so the product is
   // closed-form and no per-draw allocation is needed.
   const model = new Float32Array(16);
@@ -124,13 +140,18 @@ export function createRenderer(canvas) {
     setCamera(viewProj, cameraEye, background) {
       gl.uniformMatrix4fv(u.viewProj, false, viewProj);
       gl.uniform3fv(u.camPos, cameraEye);
-      // Compared by identity: pass a new array to change the background, never
-      // mutate this one in place. clear() relies on the clearColor set here.
-      if (background !== bg) {
-        bg = background;
+      // Compared by value, not by identity: the life-lost tint mutates one
+      // scratch array per frame, and an identity check would leave both uBg and
+      // the clear colour on the old background with nothing to notice it.
+      if (!bgSet || bg[0] !== background[0] || bg[1] !== background[1] || bg[2] !== background[2]) {
+        bg.set(background);
+        bgSet = true;
         gl.uniform3fv(u.bg, bg);
         gl.clearColor(bg[0], bg[1], bg[2], 1);
       }
+    },
+    setBall(x, y, z, strength) {
+      gl.uniform4f(u.ball, x, y, z, strength);
     },
     clear() {
       drawCount = 0;
@@ -138,13 +159,14 @@ export function createRenderer(canvas) {
       crackCount = 0;
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     },
-    drawCube(x, y, z, sx, sy, sz, color, grid = 0, damage = 0) {
+    drawCube(x, y, z, sx, sy, sz, color, grid = 0, damage = 0, emissive = 0) {
       model[0] = sx; model[5] = sy; model[10] = sz;
       model[12] = x; model[13] = y; model[14] = z;
       gl.uniformMatrix4fv(u.model, false, model);
       gl.uniform3fv(u.color, color);
       gl.uniform1f(u.grid, grid);
       gl.uniform3f(u.damage, damage, x, y);
+      gl.uniform1f(u.emissive, emissive);
       gl.drawElements(gl.TRIANGLES, mesh.count, gl.UNSIGNED_SHORT, 0);
       drawCount += 1;
       if (grid > 0) gridCount += 1;

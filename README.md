@@ -28,6 +28,9 @@ No engine, no framework, no runtime dependencies — plain ES modules and GLSL.
   different serve angle and palette.
 - 5 points per non-fatal hit, 10 per brick broken, 100 per cleared level; best
   score in localStorage.
+- Every brick broken before the ball comes home multiplies the brick price by
+  one more step, up to ×5. The paddle, a lost ball and a new wall all end the
+  rally, and the multiplier is the number that floats off the brick.
 
 ## Run locally
 
@@ -66,8 +69,11 @@ shot mode is frozen" is a gate rather than a claim.
   from a small integer hash of the game state, so there is no RNG anywhere and
   the same ticks always replay the same game.
 - `src/gl.js` + `src/cube.js` — one shader program, one cube mesh, flat shading,
-  distance fog, and a floor grid in the fragment shader (shared with the
-  tower-stack-webgl demo).
+  distance fog, a floor grid, per-brick cracks, and the ball as a moving point
+  light, all in the fragment shader (shared with the tower-stack-webgl demo).
+- `src/camera.js` — the only writer of the eye position, impact shake included;
+  `src/fx.js` — seeded brick shards and the distance-sampled trail, both pure;
+  `src/sfx.js` — sounds synthesised from oscillators, muted state persisted.
 - `src/main.js` — DOM wiring, pointer/keyboard input, HUD, and the
   `?autotest=1`, `?shot=1`, `?nogl=1` modes used by the tooling.
 
@@ -78,7 +84,8 @@ shot mode is frozen" is a gate rather than a claim.
   render-only — and the paddle only returns balls that reach its own height.
   There is no depth travel: an earlier fully-3D ball model produced phantom
   mid-air returns and vertical locks.
-- Two capsule types only; no audio, accounts, or leaderboard.
+- Two capsule types only; no accounts or leaderboard. The sounds are
+  synthesised from oscillators (no audio files) and can be muted from the HUD.
 - Requires WebGL2; without it a fallback message is shown.
 - The smoke test runs Chrome with SwiftShader: it verifies correctness, not GPU performance.
 

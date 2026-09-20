@@ -53,6 +53,9 @@ export const SLOW_TIME = 6;
 // End-of-level tail: a level closes on its last stragglers instead of turning
 // into a hunt for them across a board that is mostly holes by then.
 export const CLEAR_THRESHOLD = 2;
+// Rally scoring: every brick broken before the ball comes back to the paddle is
+// worth one more multiple of the brick price, up to this cap.
+export const COMBO_MAX = 5;
 
 // Float32Array so uniform3fv uploads them without converting on every draw.
 export const BG_COLOR = new Float32Array([0.027, 0.039, 0.063]);
@@ -198,6 +201,15 @@ export function createGame({ best = 0 } = {}) {
   let allTimeBest = best;
   let state = null;
 
+  const emit = (event) => { state.events.push(event); };
+  const emitWall = () => emit({ type: 'wall', x: state.ball.x, y: state.ball.y });
+  // Every brick contact reports the same shape: where it was, which palette tier
+  // it wore, whether it broke, and what the rally paid for it.
+  const emitBrick = (brick, index, destroyed, points) => emit({
+    type: 'brick', x: brick.x, y: brick.y, index, tier: brick.c,
+    destroyed, solid: brick.solid, points, combo: state.combo,
+  });
+
   const paddleTop = () => PADDLE_Y + PADDLE_H / 2;
   // The one source of paddle width: physics, the clamp and the drawn cube all
   // read it, so the hitbox can never drift from the geometry on screen.
@@ -217,6 +229,7 @@ export function createGame({ best = 0 } = {}) {
   // in flight, no leftover effects, and the paddle re-clamped to its new width.
   const startLevel = () => {
     state.bricks = parsePattern(patternFor(state.level));
+    state.combo = 0;
     state.drops = [];
     state.effects = { wide: 0, slow: 0 };
     state.state = 'ready';
@@ -228,6 +241,10 @@ export function createGame({ best = 0 } = {}) {
     state = {
       state: 'ready',
       resumeTo: null,
+      // Impact feed for main.js, cleared on the first line of every tick. Never
+      // part of snapshot(): two determinism tests compare whole snapshots.
+      events: [],
+      combo: 0,
       bricks: [],
       drops: [],
       effects: { wide: 0, slow: 0 },
@@ -311,6 +328,7 @@ export function createGame({ best = 0 } = {}) {
       if (drop.y - DROP_H / 2 <= paddleTop()
         && drop.y + DROP_H / 2 >= PADDLE_Y - PADDLE_H / 2
         && Math.abs(drop.x - state.paddleX) <= paddleHalf() + DROP_W / 2) {
+        emit({ type: 'capsule', kind: drop.type, x: drop.x, y: drop.y });
         state.effects[drop.type] = drop.type === 'wide' ? WIDE_TIME : SLOW_TIME;
         if (drop.type === 'wide') state.paddleX = clampPaddleX(state.paddleX);
         else setBallSpeed(ballSpeed());
@@ -329,9 +347,12 @@ export function createGame({ best = 0 } = {}) {
     ball.vy = ball.vy / length * target;
   };
 
-  const clearBrick = (brick) => {
+  const clearBrick = (brick, index) => {
     brick.alive = false;
-    state.score += SCORE_BRICK;
+    state.combo = Math.min(COMBO_MAX, state.combo + 1);
+    const points = SCORE_BRICK * state.combo;
+    state.score += points;
+    emitBrick(brick, index, true, points);
     const stragglers = bricksLeft();
     if (stragglers <= CLEAR_THRESHOLD) {
       // The last stragglers on a holed board are a hunt, not a challenge, so the
@@ -340,6 +361,7 @@ export function createGame({ best = 0 } = {}) {
       state.level += 1;
       state.speed = Math.min(MAX_SPEED, state.speed + SPEED_STEP);
       startLevel();
+      emit({ type: 'level', level: state.level });
       return true;
     }
     return false;
@@ -351,9 +373,9 @@ export function createGame({ best = 0 } = {}) {
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
 
-    if (ball.x < -X_LIMIT) { ball.x = -X_LIMIT; ball.vx = Math.abs(ball.vx); }
-    else if (ball.x > X_LIMIT) { ball.x = X_LIMIT; ball.vx = -Math.abs(ball.vx); }
-    if (ball.y > CEILING - BALL_R) { ball.y = CEILING - BALL_R; ball.vy = -Math.abs(ball.vy); }
+    if (ball.x < -X_LIMIT) { ball.x = -X_LIMIT; ball.vx = Math.abs(ball.vx); emitWall(); }
+    else if (ball.x > X_LIMIT) { ball.x = X_LIMIT; ball.vx = -Math.abs(ball.vx); emitWall(); }
+    if (ball.y > CEILING - BALL_R) { ball.y = CEILING - BALL_R; ball.vy = -Math.abs(ball.vy); emitWall(); }
 
     // Brick collision: exact circle-vs-rect contact, reflected about the
     // contact normal. Unlike an inflated-box test, a ball only hits a brick it
@@ -396,12 +418,16 @@ export function createGame({ best = 0 } = {}) {
         ball.vy -= 2 * dot * uy;
         clampAngle();
         // Solid bricks are pure geometry: they bounce, score nothing, stay put.
-        if (!brick.solid) {
+        if (brick.solid) {
+          emitBrick(brick, index, false, 0);
+        } else {
           brick.hp -= 1;
-          if (brick.hp > 0) state.score += SCORE_CHIP;
-          else {
+          if (brick.hp > 0) {
+            state.score += SCORE_CHIP;
+            emitBrick(brick, index, false, SCORE_CHIP);
+          } else {
             maybeDrop(brick, index);
-            if (clearBrick(brick)) return;
+            if (clearBrick(brick, index)) return;
           }
         }
       }
@@ -422,11 +448,15 @@ export function createGame({ best = 0 } = {}) {
       const speed = ballSpeed();
       ball.vx = Math.sin(angle) * speed;
       ball.vy = Math.cos(angle) * speed;
+      state.combo = 0; // the rally ends where the ball comes home
+      emit({ type: 'paddle', x: ball.x, offset });
       return;
     }
 
     if (ball.y < LOST_Y) {
+      emit({ type: 'lost', x: ball.x, y: ball.y });
       state.state = 'life-lost';
+      state.combo = 0;
       state.lives -= 1;
       state.lostTimer = LOST_TIME;
       state.ball.vy = -2.4;
@@ -438,6 +468,7 @@ export function createGame({ best = 0 } = {}) {
   };
 
   const tick = (dt) => {
+    state.events.length = 0; // one tick of life, so main.js cannot read a hit twice
     if (!Number.isFinite(dt)) return; // a stalled frame must not poison positions or timers
     const d = Math.min(Math.max(dt, 0), MAX_DT);
     if (state.state === 'paused' || state.state === 'over' || state.state === 'ready') return;
@@ -516,6 +547,7 @@ export function createGame({ best = 0 } = {}) {
         paddleX: state.paddleX,
         paddleHalf: paddleHalf(),
         speed: state.speed,
+        combo: state.combo,
         drops: state.drops.length,
         wide: state.effects.wide,
         slow: state.effects.slow,

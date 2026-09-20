@@ -15,9 +15,10 @@
     <p class="hud-item">Lives <strong id="lives">3</strong></p>
     <p class="hud-item">Level <strong id="level">1</strong></p>
     <p class="hud-item">Best <strong id="best">0</strong></p>
+    <button id="mute" type="button" aria-pressed="false">Mute</button>
     <button id="pause" type="button" aria-pressed="false">Pause</button>
   </header>
-  <div class="stage">
+  <div class="stage" id="stage">
     <canvas id="game" width="800" height="450" tabindex="0"
       aria-label="Breakout 3D game. Drag, move the mouse, or use the A/D or arrow keys to move the paddle; tap, click, or press Space to serve."></canvas>
     <div id="overlay" class="overlay">

@@ -35,3 +35,17 @@ test('the overlay lets pointer events through to the canvas', () => {
   assert.match(css, /\.overlay\s*\{[^}]*pointer-events:\s*none/);
   assert.match(css, /\.overlay button\s*\{[^}]*pointer-events:\s*auto/);
 });
+
+test('the sound toggle ships in the HUD, off by default', () => {
+  assert.match(html, /id="mute"[^>]*aria-pressed="false"/, 'a mute button with a reported state');
+});
+
+test('floating score numbers animate, and reduced motion takes the movement away', () => {
+  // The animation is also how a pop is removed (main.js listens for
+  // animationend), so losing it leaks a span per brick.
+  assert.match(css, /\.pop\s*\{[^}]*animation:\s*pop-rise/, 'the pops are a CSS animation, not a JS timer');
+  assert.match(css, /@keyframes pop-rise/, 'and the keyframes they name exist');
+  const calm = /@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/.exec(css)?.[1];
+  assert.ok(calm, 'the stylesheet answers prefers-reduced-motion');
+  assert.match(calm, /\.pop\s*\{[^}]*animation:/, 'and takes the flight away from the pops');
+});

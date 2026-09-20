@@ -1,4 +1,5 @@
-// Best-score persistence. Storage can be blocked (private mode, quota) — that is
+// Persistence of the two small numbers the game keeps: the best score and the
+// mute flag. Storage can be blocked (private mode, quota) — that is
 // non-critical, so every helper swallows failures instead of breaking the game.
 
 export function getStorage() {
@@ -23,6 +24,6 @@ export function writeBest(storage, value, key = 'breakout-3d.best') {
   try {
     storage.setItem(key, String(value));
   } catch {
-    /* blocked storage: keeping a best score is not worth interrupting play */
+    /* blocked storage: keeping a preference is not worth interrupting play */
   }
 }
