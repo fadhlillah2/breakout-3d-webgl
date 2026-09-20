@@ -34,11 +34,11 @@ export const BRICK_W = 0.9;
 export const BRICK_H = 0.5;
 export const BRICK_D = 0.3;
 // The wall hangs from the ceiling, so a pattern may be any number of rows deep.
-export const BRICK_TOP_Y = CEILING - 0.9;
-export const BRICK_ROW_PITCH = 0.6;
+const BRICK_TOP_Y = CEILING - 0.9;
+const BRICK_ROW_PITCH = 0.6;
 // Difficulty curve beyond speed: the paddle narrows every level down to a floor
 // that a perfect tracker still survives (gated in unit.content.test.mjs).
-export const PADDLE_SHRINK = 0.94;
+const PADDLE_SHRINK = 0.94;
 export const PADDLE_MIN_HALF = 0.5;
 // Power-ups: one capsule in eight bricks, half of each kind.
 export const DROP_RATE = 0.12;
@@ -60,7 +60,7 @@ export const FLOOR_COLOR = new Float32Array([0.07, 0.09, 0.13]);
 export const PADDLE_COLOR = new Float32Array([0.36, 0.88, 0.78]);
 export const BALL_COLOR = new Float32Array([0.93, 0.95, 0.97]);
 export const TRAIL_COLOR = new Float32Array([0.2, 0.55, 0.5]);
-export const STEEL_COLOR = new Float32Array([0.42, 0.47, 0.55]);
+export const STEEL_COLOR = new Float32Array([0.44, 0.49, 0.57]);
 export const DROP_COLORS = {
   wide: new Float32Array([0.45, 0.95, 0.55]),
   slow: new Float32Array([0.55, 0.7, 1.0]),
@@ -144,7 +144,7 @@ const PADDLE_MIN_ANGLE = 16 * Math.PI / 180;
 const PADDLE_MAX_ANGLE = 60 * Math.PI / 180;
 // Column pitch that centres the wall and puts both outer brick faces exactly on
 // the limit of where the ball centre can travel, so no brick is out of reach.
-export const BRICK_PITCH = (2 * (HALF_W - BALL_R) - BRICK_W) / (BRICK_COLS - 1);
+const BRICK_PITCH = (2 * (HALF_W - BALL_R) - BRICK_W) / (BRICK_COLS - 1);
 const X_LIMIT = HALF_W - BALL_R;
 // The serve fan: wide enough that no two consecutive levels open the same way.
 const SERVE_MIN_ANGLE = 14 * Math.PI / 180;
@@ -152,10 +152,16 @@ const SERVE_MAX_ANGLE = 38 * Math.PI / 180;
 
 // Deterministic stand-in for randomness (FNV-1a over three small integers): the
 // whole game stays replayable because every "roll" is a pure function of state.
+// The murmur3 finaliser is load-bearing, not decoration: without a full
+// avalanche the low bits of the last input barely reach the high bits the float
+// is taken from, so two rolls that differ only in the salt — the drop gate and
+// the drop type — come out correlated and one capsule never appears.
 export const hash01 = (a, b, c) => {
   let h = 2166136261;
   for (const v of [a, b, c]) { h ^= v | 0; h = Math.imul(h, 16777619); }
-  h ^= h >>> 15;
+  h ^= h >>> 16; h = Math.imul(h, 2246822507);
+  h ^= h >>> 13; h = Math.imul(h, 3266489909);
+  h ^= h >>> 16;
   return (h >>> 0) / 4294967296;
 };
 
@@ -299,9 +305,12 @@ export function createGame({ best = 0 } = {}) {
     for (let i = state.drops.length - 1; i >= 0; i--) {
       const drop = state.drops[i];
       drop.y -= DROP_SPEED * dt;
-      // Caught anywhere in the paddle's own band, not only on its top face: a
-      // capsule is a pickup, so it is forgiving where the ball is strict.
-      if (drop.y <= paddleTop() + DROP_H && Math.abs(drop.x - state.paddleX) <= paddleHalf() + DROP_W / 2) {
+      // Caught anywhere in the paddle's own band, not only on its top face (a
+      // capsule is a pickup, so it is forgiving where the ball is strict) — but
+      // the band is the drawn cube, so nothing is picked up out of thin air.
+      if (drop.y - DROP_H / 2 <= paddleTop()
+        && drop.y + DROP_H / 2 >= PADDLE_Y - PADDLE_H / 2
+        && Math.abs(drop.x - state.paddleX) <= paddleHalf() + DROP_W / 2) {
         state.effects[drop.type] = drop.type === 'wide' ? WIDE_TIME : SLOW_TIME;
         if (drop.type === 'wide') state.paddleX = clampPaddleX(state.paddleX);
         else setBallSpeed(ballSpeed());

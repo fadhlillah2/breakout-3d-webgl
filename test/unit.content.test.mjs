@@ -5,9 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, hash01, parsePattern, patternFor, levelPalette, levelPaddleHalf,
-  PATTERNS, PALETTES, BG_COLOR, BRICK_COLS, BRICK_W, BRICK_H, BALL_R, HALF_W, CEILING,
+  PATTERNS, PALETTES, BG_COLOR, STEEL_COLOR, DROP_COLORS, BRICK_COLS, BRICK_W, BRICK_H, BALL_R, HALF_W, CEILING,
   PADDLE_Y, PADDLE_H, PADDLE_HALF, PADDLE_MIN_HALF, SCORE_BRICK, SCORE_CHIP, SCORE_LEVEL,
-  DROP_RATE, DROP_TYPES, DROP_SPEED, WIDE_FACTOR, WIDE_TIME, SLOW_FACTOR, SLOW_TIME,
+  DROP_RATE, DROP_TYPES, DROP_SPEED, DROP_H, WIDE_FACTOR, WIDE_TIME, SLOW_FACTOR, SLOW_TIME,
   CLEAR_THRESHOLD, BASE_SPEED, LOST_Y, LIVES,
 } from '../src/game.js';
 
@@ -33,12 +33,15 @@ const smash = (g, brick, { vy = 8 } = {}) => {
   g.tick(0.01);
 };
 
+// Only slots that exist on this level count: a hit past the wall would come
+// back as `undefined` from view().bricks and fail as a TypeError instead.
 const dropIndex = (level, type) => {
-  for (let i = 0; i < 400; i++) {
+  const slots = parsePattern(patternFor(level)).length;
+  for (let i = 0; i < slots; i++) {
     if (hash01(level, i, 1) >= DROP_RATE) continue;
     if (DROP_TYPES[Math.floor(hash01(level, i, 2) * DROP_TYPES.length)] === type) return i;
   }
-  throw new Error(`no seeded ${type} drop in the first 400 brick slots`);
+  throw new Error(`level ${level} seeds no ${type} capsule in its ${slots} brick slots`);
 };
 
 const linear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
@@ -108,6 +111,7 @@ test('the level layout rotates through the pattern table', () => {
     assert.deepEqual(patternFor(level), PATTERNS[(level - 1) % PATTERNS.length], `level ${level} pattern`);
   }
   const g = createGame();
+  assert.equal(g.snapshot().bricksLeft, 32, 'level 1 is the published 32-brick wall'); // product contract, not a restatement of parsePattern
   assert.equal(shape(g.view().bricks), shape(parsePattern(PATTERNS[0])), 'level 1 lays out pattern 0');
   assert.notEqual(shape(parsePattern(PATTERNS[0])), shape(parsePattern(PATTERNS[1])), 'patterns differ');
 });
@@ -316,11 +320,18 @@ test('level palettes are deterministic and stay readable on the background', () 
   }
   for (const [i, palette] of PALETTES.entries()) {
     assert.equal(palette.length, 3, `palette ${i} covers the three hit-point tiers`);
-    for (const color of palette) {
-      for (const channel of color) assert.ok(channel >= 0 && channel <= 1, `palette ${i} channel in range`);
-      const ratio = contrast(color, BG_COLOR);
-      assert.ok(ratio >= 4.5, `palette ${i} colour ${[...color]} has ${ratio.toFixed(1)}:1 on the background`);
-    }
+  }
+  // Every colour drawn into the wall, not only the palettes: steel and the
+  // capsules are read at the same glance and were the two left out of the gate.
+  const named = [
+    ...PALETTES.flatMap((p, i) => p.map((c, tier) => [`palette ${i} tier ${tier}`, c])),
+    ['steel', STEEL_COLOR],
+    ...DROP_TYPES.map((type) => [`${type} capsule`, DROP_COLORS[type]]),
+  ];
+  for (const [label, color] of named) {
+    for (const channel of color) assert.ok(channel >= 0 && channel <= 1, `${label} channel in range`);
+    const ratio = contrast(color, BG_COLOR);
+    assert.ok(ratio >= 4.5, `${label} ${[...color]} has ${ratio.toFixed(2)}:1 on the background`);
   }
 });
 
@@ -357,4 +368,49 @@ test('identical tick sequences produce identical runs across several levels', ()
   const first = run();
   assert.equal(first, run());
   assert.match(first, /"level":[2-9]/, 'the run really crossed a level boundary');
+});
+
+test('the drop table is not biased towards one capsule type', () => {
+  // The gate roll and the type roll differ only in the salt, so a hash that
+  // does not avalanche makes one capsule all but unreachable.
+  const seen = { wide: 0, slow: 0 };
+  for (let level = 1; level <= 200; level++) {
+    for (let slot = 0; slot < 40; slot++) {
+      if (hash01(level, slot, 1) >= DROP_RATE) continue;
+      seen[DROP_TYPES[Math.floor(hash01(level, slot, 2) * DROP_TYPES.length)]] += 1;
+    }
+  }
+  const total = seen.wide + seen.slow;
+  assert.ok(total > 500, `enough drops to judge the split (${total})`);
+  for (const type of DROP_TYPES) {
+    const share = seen[type] / total;
+    assert.ok(share >= 0.35 && share <= 0.65,
+      `${type} is ${(share * 100).toFixed(1)}% of all capsules (${JSON.stringify(seen)})`);
+  }
+  // A 12 % rate over ~30 slots leaves a single level short of one type by plain
+  // arithmetic; what the bias broke was both types being reachable at all.
+  for (const type of DROP_TYPES) {
+    const levels = PATTERNS.map((_, i) => i + 1).filter((level) => {
+      try { dropIndex(level, type); return true; } catch { return false; }
+    });
+    assert.ok(levels.length >= PATTERNS.length - 1, `${type} is seeded on ${levels.length} of the patterns`);
+  }
+});
+
+test('a capsule is caught exactly where it overlaps the drawn paddle', () => {
+  const g = createGame();
+  g.serve();
+  const brick = isolate(g, dropIndex(1, 'wide'));
+  smash(g, brick);
+  const drop = g.view().drops[0];
+  assert.equal(drop?.type, 'wide');
+  g.setPaddle(drop.x);
+  drop.y = PADDLE_TOP + DROP_H; // still a half-height clear of the paddle's top face
+  g.tick(0);
+  assert.equal(g.view().drops.length, 1, 'no catch before the two shapes touch');
+  assert.equal(g.snapshot().wide, 0, 'and no effect either');
+  drop.y = PADDLE_TOP + DROP_H / 2 - 1e-6; // the drawn capsule now grazes the paddle top
+  g.tick(0);
+  assert.equal(g.view().drops.length, 0, 'caught as soon as they touch');
+  assert.ok(g.snapshot().wide > 0, 'and the effect is granted');
 });

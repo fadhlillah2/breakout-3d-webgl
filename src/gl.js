@@ -39,7 +39,9 @@ void main() {
   if (uDamage.x > 0.0) {
     // Twelve procedural cracks radiating from the brick centre; no texture.
     vec2 p = vWorld.xy - uDamage.yz;
-    float spoke = abs(fract(atan(p.y, p.x) * 1.9099 + 0.37) - 0.5);
+    // atan(0,0) is undefined in GLSL ES, and the brick centre is exactly that
+    // fragment; 0.0 puts it in the hub where all twelve spokes meet.
+    float spoke = dot(p, p) > 0.0 ? abs(fract(atan(p.y, p.x) * 1.9099 + 0.37) - 0.5) : 0.0;
     float crack = smoothstep(0.055, 0.0, spoke) * smoothstep(0.32, 0.05, length(p));
     base = mix(base, base * 0.22, crack * uDamage.x);
   }

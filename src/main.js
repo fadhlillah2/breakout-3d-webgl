@@ -9,7 +9,7 @@ import { createRenderer } from './gl.js';
 import { EYE, viewProjection } from './camera.js';
 import { getStorage, readBest, writeBest } from './storage.js';
 import { isInteractiveTarget, isLeftKey, isPauseKey, isRightKey, isServeKey } from './input.js';
-import { playEndOver, playMiss, playTracking } from './autotest.js';
+import { DEEP_TICKS, playEndOver, playMiss, playTracking } from './autotest.js';
 
 const params = new URLSearchParams(location.search);
 const body = document.body;
@@ -316,6 +316,7 @@ function start(renderer) {
     const end = params.get('end');
     if (end === 'miss') playMiss(game);
     else if (end === 'over') playEndOver(game);
+    else if (end === 'deep') playTracking(game, { ticks: DEEP_TICKS });
     else playTracking(game);
     syncStatus();
     render();

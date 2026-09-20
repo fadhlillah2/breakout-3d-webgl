@@ -24,3 +24,15 @@ test('playEndOver reaches over with a positive score', () => {
   assert.ok(s.score > 0);
   assert.equal(s.best, s.score);
 });
+
+// The one place the product contract is a literal. Every other brick count in
+// the suite is derived from parsePattern, so it moves silently with the wall;
+// smoke is pure parity and holds no literal either. Edit these two numbers only
+// together with the smoke summary line and screenshots/breakout-3d.png.
+test('the tracking run lands on its published golden', () => {
+  const s = playTracking(createGame());
+  assert.equal(s.score, 190, 'golden score');
+  assert.equal(s.bricksLeft, 14, 'golden bricks left');
+  assert.equal(s.level, 1);
+  assert.equal(s.lives, LIVES);
+});

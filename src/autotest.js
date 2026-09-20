@@ -4,6 +4,10 @@
 
 export const TRACK_TICKS = 1500;
 export const MISS_TICKS = 320;
+// The only sequence that reaches a frame drawing a steel brick, a cracked brick
+// and a capsule at once (level 2 pattern, ~33 ticks of slack either side).
+// tools/smoke.mjs re-asserts that in Node before trusting the browser run.
+export const DEEP_TICKS = 4250;
 
 export function playTracking(game, { ticks = TRACK_TICKS, dt = 1 / 60 } = {}) {
   for (let i = 0; i < ticks; i++) {

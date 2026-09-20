@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createGame } from '../src/game.js';
-import { playEndOver, playMiss, playTracking } from '../src/autotest.js';
+import { DEEP_TICKS, playEndOver, playMiss, playTracking } from '../src/autotest.js';
 import { findChrome, runChrome, startServer } from './harness.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -13,6 +13,17 @@ const expected = playTracking(createGame());
 const expectedMiss = playMiss(createGame());
 const expectedOver = playEndOver(createGame());
 assert.equal(expectedOver.state, 'over', 'over scenario reaches over in Node');
+// The deep run is the only browser frame that draws a steel brick, a capsule and
+// a cracked brick, so its discriminating power is asserted here in Node before
+// the browser checks below are trusted to mean anything.
+const deepGame = createGame();
+const expectedDeep = playTracking(deepGame, { ticks: DEEP_TICKS });
+const deepBricks = deepGame.view().bricks;
+const deepSteel = deepBricks.filter((b) => b.alive && b.solid).length;
+const deepCracked = deepBricks.filter((b) => b.alive && !b.solid && b.hp < b.hp0).length;
+assert.ok(deepSteel > 0, `deep scenario still has steel bricks standing (got ${deepSteel})`);
+assert.ok(deepCracked > 0, `deep scenario still has a cracked brick standing (got ${deepCracked})`);
+assert.ok(expectedDeep.drops > 0, `deep scenario still has a capsule in flight (got ${expectedDeep.drops})`);
 
 const baseFlags = ['--headless=new', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-first-run', '--disable-gpu'];
 const attr = (dom, name) => new RegExp(`data-${name}="([^"]*)"`).exec(dom)?.[1];
@@ -42,6 +53,13 @@ try {
   check(attr(over, 'state') === 'over', `over run ends over (got ${attr(over, 'state')})`);
   check(Number(attr(over, 'stored')) === expectedOver.best, `best persisted (${attr(over, 'stored')} === ${expectedOver.best})`);
   check(/id="announce"[^>]*>[^<]*Game over/.test(over), 'game over announced in the live region');
+
+  const deep = await runChrome(CHROME, [...baseFlags, '--window-size=1366,768', '--virtual-time-budget=12000', '--dump-dom', `${base}/?autotest=1&end=deep`]);
+  check(!attr(deep, 'error'), `${deepSteel} steel, ${deepCracked} cracked and ${expectedDeep.drops} capsule(s) drawn without error`);
+  check(Number(attr(deep, 'draws')) > 0, 'deep frame drawn');
+  check(Number(attr(deep, 'level')) === expectedDeep.level, `deep level ${attr(deep, 'level')} === ${expectedDeep.level}`);
+  check(Number(attr(deep, 'score')) === expectedDeep.score, `deep score ${attr(deep, 'score')} === ${expectedDeep.score}`);
+  check(Number(attr(deep, 'bricks')) === expectedDeep.bricksLeft, `deep bricks ${attr(deep, 'bricks')} === ${expectedDeep.bricksLeft}`);
 
   const nogl = await runChrome(CHROME, [...baseFlags, '--window-size=1366,768', '--virtual-time-budget=4000', '--dump-dom', `${base}/?nogl=1`]);
   check(attr(nogl, 'gl') === 'nogl', 'fallback flag set when WebGL2 is unavailable');
