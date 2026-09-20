@@ -68,9 +68,11 @@ shot mode is frozen" is a gate rather than a claim.
   into a vertical loop. Level layouts, capsule drops and serve angles all come
   from a small integer hash of the game state, so there is no RNG anywhere and
   the same ticks always replay the same game.
-- `src/gl.js` + `src/cube.js` — one shader program, one cube mesh, flat shading,
-  distance fog, a floor grid, per-brick cracks, and the ball as a moving point
-  light, all in the fragment shader (shared with the tower-stack-webgl demo).
+- `src/gl.js` + `src/cube.js` — one shader program, one cube mesh: a hemisphere
+  ambient over a directional light, a rim term, per-draw distance fog, an
+  `fwidth` floor grid, a contact shadow under the paddle, per-brick cracks, and
+  the ball as a moving point light — all in the one fragment shader, with no
+  second pass and no draw call of their own.
 - `src/camera.js` — the only writer of the eye position, impact shake included;
   `src/fx.js` — seeded brick shards and the distance-sampled trail, both pure;
   `src/sfx.js` — sounds synthesised from oscillators, muted state persisted.

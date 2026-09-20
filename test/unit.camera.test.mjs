@@ -5,7 +5,8 @@ import {
   viewProjection,
 } from '../src/camera.js';
 import {
-  createGame, BALL_R, BALL_Z, BRICK_D, CEILING, HALF_W, PADDLE_D, PADDLE_H, PADDLE_Y, PADDLE_Z,
+  createGame, ARENA_BACK, ARENA_FRONT, BALL_R, BALL_Z, BRICK_D, CEILING, FLOOR_D, FLOOR_W, FLOOR_Z,
+  HALF_W, PADDLE_D, PADDLE_H, PADDLE_Y, PADDLE_Z,
 } from '../src/game.js';
 
 // CSS pins the canvas to 16:9 and the screenshot runs 1200x675, so one aspect is
@@ -101,4 +102,27 @@ test('resetCamera drops the shake in one call, which is what a frozen shot needs
   assert.notDeepEqual([...EYE], REST);
   resetCamera();
   assert.deepEqual([...EYE], REST);
+});
+
+// The floor and the arena shell are the two pieces of scenery big enough to end
+// inside the frame, and both did: the floor showed its side edges as a lit
+// trapezoid, and a shell that stopped in front of the camera showed its cut
+// ends with the floor outside the room visible past them. Neither is something
+// a screenshot check would catch — the PNG is the right size either way.
+test('the floor and the arena shell run out of frame instead of ending in it', () => {
+  assert.ok(ARENA_FRONT > EYE[2],
+    `the shell ends at z=${ARENA_FRONT}, in front of the eye at z=${EYE[2]}, so its near end is in frame`);
+  assert.ok(FLOOR_Z + FLOOR_D / 2 > EYE[2],
+    `the floor ends at z=${FLOOR_Z + FLOOR_D / 2}, in front of the eye at z=${EYE[2]}`);
+  const m = viewProjection(ASPECT);
+  // Only the floor between the back wall and the camera can be seen — the shell
+  // closes the room off behind that — so those are the depths where a side edge
+  // would show.
+  for (const z of [ARENA_BACK, BALL_Z, PADDLE_Z, EYE[2] - 1]) {
+    for (const sx of [-1, 1]) {
+      const [nx] = project(m, sx * FLOOR_W / 2, 0, z);
+      assert.ok(Math.abs(nx) > 1,
+        `the floor edge at (${sx * FLOOR_W / 2}, ${z}) is inside the frame at ndc x ${nx.toFixed(3)}`);
+    }
+  }
 });

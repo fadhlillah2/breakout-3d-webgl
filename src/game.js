@@ -33,6 +33,20 @@ export const BRICK_COLS = 8;
 export const BRICK_W = 0.9;
 export const BRICK_H = 0.5;
 export const BRICK_D = 0.3;
+// The arena shell — the room the ball is actually inside. The side walls stand
+// on |x| = HALF_W and the ceiling on y = CEILING, so the surface the player
+// sees is the plane the ball turns on, with the slab thickness drawn outward,
+// away from the play space. The back wall closes the room behind the bricks.
+export const WALL_T = 0.3;
+export const ARENA_BACK = BALL_Z - BRICK_D / 2 - 1.0;
+// Past the camera: a shell that stopped in front of it showed its own cut ends
+// and let the floor outside the room show past them.
+export const ARENA_FRONT = PADDLE_Z + 10;
+// The floor slab runs well outside the frustum on every side, so what ends it
+// on screen is the fog and never an edge. Gated in unit.camera.test.mjs.
+export const FLOOR_W = 40;
+export const FLOOR_D = 60;
+export const FLOOR_Z = 7;
 // The wall hangs from the ceiling, so a pattern may be any number of rows deep.
 const BRICK_TOP_Y = CEILING - 0.9;
 const BRICK_ROW_PITCH = 0.6;
@@ -60,9 +74,16 @@ export const COMBO_MAX = 5;
 // Float32Array so uniform3fv uploads them without converting on every draw.
 export const BG_COLOR = new Float32Array([0.027, 0.039, 0.063]);
 export const FLOOR_COLOR = new Float32Array([0.07, 0.09, 0.13]);
+// Deliberately recessive: the shell explains where the ball turns, it does not
+// compete with the wall for attention. Gated from above in unit.content.test.mjs.
+export const WALL_COLOR = new Float32Array([0.23, 0.27, 0.36]);
 export const PADDLE_COLOR = new Float32Array([0.36, 0.88, 0.78]);
+// Neutral white is the ball's alone: every brick, capsule and the steel block is
+// far enough off it in RGB that the ball can never be read as part of the wall
+// (gated in unit.content.test.mjs). The trail is the ball dimmed, so it always
+// reads as the ball's own motion instead of as a second body.
 export const BALL_COLOR = new Float32Array([0.93, 0.95, 0.97]);
-export const TRAIL_COLOR = new Float32Array([0.2, 0.55, 0.5]);
+export const TRAIL_COLOR = BALL_COLOR.map((c) => c * 0.62);
 export const STEEL_COLOR = new Float32Array([0.44, 0.49, 0.57]);
 export const DROP_COLORS = {
   wide: new Float32Array([0.45, 0.95, 0.55]),
@@ -74,27 +95,27 @@ export const PALETTES = [
   [
     new Float32Array([0.36, 0.88, 0.78]), // teal #5ce1c6
     new Float32Array([0.95, 0.75, 0.47]), // amber #f2c078
-    new Float32Array([0.93, 0.95, 0.97]), // off-white #eef2f8
+    new Float32Array([0.70, 0.55, 1.0]),  // violet #b38cff
   ],
   [
     new Float32Array([1.0, 0.56, 0.48]),  // coral #ff8f7a
     new Float32Array([1.0, 0.82, 0.4]),   // gold #ffd166
-    new Float32Array([0.72, 0.96, 0.85]), // mint #b7f5d8
+    new Float32Array([0.30, 0.65, 1.0]),  // azure #4da6ff
   ],
   [
     new Float32Array([0.49, 0.77, 1.0]),  // sky #7cc4ff
     new Float32Array([0.79, 0.65, 1.0]),  // lilac #c9a7ff
-    new Float32Array([1.0, 0.91, 0.78]),  // cream #ffe9c7
+    new Float32Array([1.0, 0.69, 0.23]),  // tangerine #ffb03a
   ],
   [
     new Float32Array([0.66, 0.88, 0.39]), // lime #a8e063
     new Float32Array([0.35, 0.82, 0.91]), // aqua #5ad2e8
-    new Float32Array([1.0, 0.85, 0.63]),  // sand #ffd9a0
+    new Float32Array([1.0, 0.44, 0.66]),  // magenta #ff70a8
   ],
   [
     new Float32Array([1.0, 0.62, 0.77]),  // rose #ff9ec4
     new Float32Array([0.62, 0.71, 1.0]),  // periwinkle #9fb6ff
-    new Float32Array([0.96, 0.94, 0.85]), // ivory #f6f0d8
+    new Float32Array([0.40, 0.90, 0.66]), // jade #66e6a8
   ],
 ];
 

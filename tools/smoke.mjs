@@ -57,15 +57,18 @@ const catchLine = (PADDLE_Y + PADDLE_H / 2).toFixed(4);
 const baseFlags = ['--headless=new', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-first-run', '--disable-gpu'];
 const attr = (dom, name) => new RegExp(`data-${name}="([^"]*)"`).exec(dom)?.[1];
 const hud = (dom, id) => Number(new RegExp(`id="${id}"[^>]*>([^<]*)<`).exec(dom)?.[1]);
+// The cubes every frame draws whatever the state is: the floor, the two side
+// walls, the ceiling and the back wall of the arena shell, and the paddle.
+const FIXED_CUBES = 6;
 // data-draws counts one frame now, and the autotest path renders exactly once,
 // so the browser's draw count is derivable from the state Node just computed:
-// floor + paddle + every brick still standing + every capsule in flight + the
+// the fixed set + every brick still standing + every capsule in flight + the
 // ball. Nothing samples the trail in autotest mode. A brick, a steel block or a
 // capsule that stops being drawn changes this number; a running total would not.
 const expectedDraws = (game, fx = null) => {
   const view = game.view();
   const lit = view.ball.y >= BALL_R;
-  return 2 + view.bricks.filter((b) => b.alive).length + view.drops.length
+  return FIXED_CUBES + view.bricks.filter((b) => b.alive).length + view.drops.length
     + (lit ? 1 + (fx ? Math.max(0, fx.trail.points.length - 1) : 0) : 0)
     + (fx ? fx.debris() : 0);
 };

@@ -1,9 +1,10 @@
 // DOM wiring: canvas, pointer/keyboard input, HUD, impact feedback, and the
 // ?autotest=1 / ?shot=1 / ?nogl=1 modes. The camera lives in camera.js.
 import {
-  createGame, levelPalette, BALL_COLOR, BALL_R, BALL_Z, BG_COLOR, BRICK_D, DROP_COLORS, DROP_H,
-  DROP_W, FLOOR_COLOR, HALF_W, PADDLE_COLOR, PADDLE_D, PADDLE_H, PADDLE_Y, PADDLE_Z, STEEL_COLOR,
-  TRAIL_COLOR,
+  createGame, levelPalette, ARENA_BACK, ARENA_FRONT, BALL_COLOR, BALL_R, BALL_Z, BG_COLOR, BRICK_D,
+  CEILING, DROP_COLORS, DROP_H, DROP_W, FLOOR_COLOR, FLOOR_D, FLOOR_W, FLOOR_Z, HALF_W,
+  PADDLE_COLOR, PADDLE_D, PADDLE_H, PADDLE_Y, PADDLE_Z, STEEL_COLOR, TRAIL_COLOR, WALL_COLOR,
+  WALL_T,
 } from './game.js';
 import { createRenderer } from './gl.js';
 import {
@@ -118,14 +119,30 @@ function start(renderer) {
   const WALL_DROP_FALL = 0.38;
   const WALL_DROP_STAGGER = 0.012;
   const WALL_DROP_RISE = 5;
+  const WALL_SETTLE = 0.18;
   const BALL_LIGHT = 1.7;
   const BALL_LIGHT_Z = 0.6;
   const MAX_FAILURES = 5;
+
+  // Fog is set per group of draws, not globally: the floor has to dissolve
+  // before its far edge reaches the frustum, while the brick wall has to keep
+  // its colour at the same distance. (density multiplier, most it may take)
+  const FOG_FLOOR = [1.3, 1.0];
+  const FOG_SHELL = [0.75, 0.88];
+  const FOG_WALL = [0.5, 0.7];
+  const FOG_BODY = [1.0, 0.85];
+  // The side walls and ceiling as one slab each, running from the back wall out
+  // past the camera; SHELL_SPAN reaches the outer face of both side walls so
+  // the ceiling and the back wall close the room off at the corners.
+  const SHELL_Z = (ARENA_BACK + ARENA_FRONT) / 2;
+  const SHELL_D = ARENA_FRONT - ARENA_BACK;
+  const SHELL_SPAN = 2 * (HALF_W + WALL_T);
 
   let hitStop = 0;
   let squash = 0;
   let lostFlash = 0;
   let wallDrop = FX ? WALL_DROP_TIME : 0;
+  let wallSettle = 0;
   let failures = 0;
 
   // Scratch background for the life-lost tint. gl.setCamera compares the three
@@ -207,17 +224,23 @@ function start(renderer) {
     squash = Math.max(0, squash - dt / SQUASH_TIME);
     lostFlash = Math.max(0, lostFlash - dt / LOST_FLASH_TIME);
     wallDrop = Math.max(0, wallDrop - dt);
+    // Serving mid-drop eases the rest of the fall away over WALL_SETTLE instead
+    // of cutting it: forcing the lift to zero on the first frame after a serve
+    // teleported every brick still in the air into its slot, up to five units
+    // in one frame. Nothing is held back from the player — even at MAX_SPEED
+    // the ball needs about 0.32 s to reach the lowest row, so the wall is back
+    // on its hitbox well before it can be touched.
+    wallSettle = view.state === 'ready' ? 0 : Math.min(1, wallSettle + dt / WALL_SETTLE);
   };
 
-  // The wall only falls while the board is idle: the moment the ball is live,
-  // every brick must be drawn exactly where the physics says it is. The state is
-  // read here rather than in stepFx because serve, resize and the deterministic
-  // modes all draw without ever going round the loop.
-  const brickLift = (index, state) => {
-    if (wallDrop <= 0 || state !== 'ready') return 0;
+  // How high above its slot a brick still hangs. Read here rather than in
+  // stepFx because serve, resize and the deterministic modes all draw without
+  // ever going round the loop.
+  const brickLift = (index) => {
+    if (wallDrop <= 0 || wallSettle >= 1) return 0;
     const t = (WALL_DROP_TIME - wallDrop - index * WALL_DROP_STAGGER) / WALL_DROP_FALL;
     const eased = Math.min(1, Math.max(0, t));
-    return (1 - eased) ** 3 * WALL_DROP_RISE;
+    return (1 - eased) ** 3 * WALL_DROP_RISE * (1 - wallSettle);
   };
 
   // Reused so a damaged brick can darken without allocating a colour per draw.
@@ -253,26 +276,52 @@ function start(renderer) {
     // faces the player is looking at.
     if (lit) renderer.setBall(ball.x, ball.y, ball.z + BALL_LIGHT_Z, BALL_LIGHT);
     else renderer.setBall(0, 0, 0, 0);
+    // Drawn from the same half-width the physics catches with, so a widened or
+    // shrunken paddle is never a lie on screen. The catch squash takes its
+    // height off the bottom only: the top face stays on the catch line the ball
+    // is caught at, and the width never leaves the hitbox. In front of the
+    // ball's depth slab, so paddle and ball never interpenetrate.
+    const paddleH = PADDLE_H * (1 - SQUASH_DEPTH * squash);
+    const paddleCy = PADDLE_Y + (PADDLE_H - paddleH) / 2;
+    // From the box the paddle is really drawn in, so a squashed or widened
+    // paddle never casts a pool its own geometry does not match.
+    renderer.setPaddleShadow(view.paddleX, PADDLE_Z + PADDLE_D / 2,
+      Math.max(0, paddleCy - paddleH / 2), snap.paddleHalf);
     renderer.clear();
-    // Runs past the camera so the frame never shows the floor slab's near edge.
-    renderer.drawCube(0, -0.02, 7, 10, 0.04, 18, FLOOR_COLOR, 1);
+    // Runs far past the frustum on every side, so what ends the floor in frame
+    // is the fog rather than an edge.
+    renderer.setFog(...FOG_FLOOR);
+    renderer.drawCube(0, -0.02, FLOOR_Z, FLOOR_W, 0.04, FLOOR_D, FLOOR_COLOR, 1);
+    // The room itself. Without it the brick wall hangs in empty space and the
+    // bounce limits at |x| = HALF_W and y = CEILING are invisible.
+    renderer.setFog(...FOG_SHELL);
+    for (const side of [-1, 1]) {
+      renderer.drawCube(side * (HALF_W + WALL_T / 2), CEILING / 2, SHELL_Z,
+        WALL_T, CEILING, SHELL_D, WALL_COLOR);
+    }
+    renderer.drawCube(0, CEILING + WALL_T / 2, SHELL_Z, SHELL_SPAN, WALL_T, SHELL_D, WALL_COLOR);
+    renderer.drawCube(0, (CEILING + WALL_T) / 2, ARENA_BACK - WALL_T / 2,
+      SHELL_SPAN, CEILING + WALL_T, WALL_T, WALL_COLOR);
+    renderer.setFog(...FOG_WALL);
     const palette = levelPalette(snap.level);
     for (let i = 0; i < view.bricks.length; i++) {
       const brick = view.bricks[i];
       if (!brick.alive) continue;
       // On the play plane, not 5.65 units behind it: a brick may only break
       // where the ball is seen to touch it.
-      const y = brick.y + brickLift(i, snap.state);
+      const y = brick.y + brickLift(i);
       // Steel gets the world-space grid lines, so it reads as a different
-      // material without a second shader.
+      // material without a second shader — at half the floor's weight, because
+      // grey takes the highlight much harder than the near-black floor does.
       if (brick.solid) {
-        renderer.drawCube(brick.x, y, BALL_Z, brick.w, brick.h, BRICK_D, STEEL_COLOR, 1);
+        renderer.drawCube(brick.x, y, BALL_Z, brick.w, brick.h, BRICK_D, STEEL_COLOR, 0.5);
         continue;
       }
       const damage = 1 - brick.hp / brick.hp0;
       const color = damage > 0 ? damaged(palette[brick.c], damage) : palette[brick.c];
       renderer.drawCube(brick.x, y, BALL_Z, brick.w, brick.h, BRICK_D, color, 0, damage);
     }
+    renderer.setFog(...FOG_BODY);
     for (const shard of shards.pool) {
       if (shard.life <= 0) continue;
       const s = SHARD_SIZE * (shard.life / SHARD_LIFE);
@@ -281,13 +330,6 @@ function start(renderer) {
     for (const drop of view.drops) {
       renderer.drawCube(drop.x, drop.y, BALL_Z, DROP_W, DROP_H, DROP_H, DROP_COLORS[drop.type], 0, 0, 0.3);
     }
-    // Drawn from the same half-width the physics catches with, so a widened or
-    // shrunken paddle is never a lie on screen. The catch squash takes its
-    // height off the bottom only: the top face stays on the catch line the ball
-    // is caught at, and the width never leaves the hitbox. In front of the
-    // ball's depth slab, so paddle and ball never interpenetrate.
-    const paddleH = PADDLE_H * (1 - SQUASH_DEPTH * squash);
-    const paddleCy = PADDLE_Y + (PADDLE_H - paddleH) / 2;
     renderer.drawCube(view.paddleX, paddleCy, PADDLE_Z + PADDLE_D / 2,
       snap.paddleHalf * 2, paddleH, PADDLE_D, PADDLE_COLOR, 0, 0, 0.7 * squash);
     // A lost ball stops being drawn at the floor instead of sinking through it.

@@ -65,3 +65,22 @@ test('the ball light and the emissive term are uploaded, not hard-coded', () => 
   renderer.drawCube(0, 0, 0, 1, 1, 1, new Float32Array([1, 1, 1]), 0, 0, 0.75);
   assert.ok(uploads(calls, 'uniform1f').some(([, , value]) => value === 0.75), 'uEmissive follows the draw');
 });
+
+// Fog is the one uniform whose value belongs to the group being drawn rather
+// than to the cube: the floor has to dissolve before its far edge reaches the
+// frustum while the brick wall at the same distance has to keep its colour.
+// Holding it across a group is what keeps that to six uploads a frame.
+test('the fog scale follows the group being drawn, and repeats are not uploaded', () => {
+  const { canvas, calls } = fakeCanvas();
+  const renderer = createRenderer(canvas);
+  const color = new Float32Array([1, 1, 1]);
+  calls.length = 0;
+  renderer.setFog(1.3, 1.0);
+  renderer.drawCube(0, 0, 0, 1, 1, 1, color);
+  renderer.setFog(1.3, 1.0); // the same group again
+  renderer.drawCube(0, 0, 0, 1, 1, 1, color);
+  assert.deepEqual(uploads(calls, 'uniform2f').map((c) => c.slice(2)), [[1.3, 1.0]],
+    'one upload for the group, not one per cube');
+  renderer.setFog(0.5, 0.7);
+  assert.deepEqual(uploads(calls, 'uniform2f')[1].slice(2), [0.5, 0.7], 'a new group uploads its own fog');
+});

@@ -5,8 +5,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, hash01, parsePattern, patternFor, levelPalette, levelPaddleHalf,
-  PATTERNS, PALETTES, BG_COLOR, STEEL_COLOR, DROP_COLORS, BRICK_COLS, BRICK_W, BRICK_H, BALL_R, HALF_W, CEILING,
-  PADDLE_Y, PADDLE_H, PADDLE_HALF, PADDLE_MIN_HALF, SCORE_BRICK, SCORE_CHIP, SCORE_LEVEL,
+  PATTERNS, PALETTES, ARENA_BACK, ARENA_FRONT, BALL_COLOR, BALL_Z, BRICK_D, PADDLE_COLOR,
+  TRAIL_COLOR, WALL_COLOR, WALL_T,
+  BG_COLOR, STEEL_COLOR, DROP_COLORS, BRICK_COLS, BRICK_W, BRICK_H, BALL_R, HALF_W, CEILING,
+  PADDLE_Y, PADDLE_H, PADDLE_D, PADDLE_Z, PADDLE_HALF, PADDLE_MIN_HALF, SCORE_BRICK, SCORE_CHIP, SCORE_LEVEL,
   DROP_RATE, DROP_TYPES, DROP_SPEED, DROP_H, WIDE_FACTOR, WIDE_TIME, SLOW_FACTOR, SLOW_TIME,
   CLEAR_THRESHOLD, BASE_SPEED, LOST_Y, LIVES,
 } from '../src/game.js';
@@ -327,6 +329,9 @@ test('level palettes are deterministic and stay readable on the background', () 
     ...PALETTES.flatMap((p, i) => p.map((c, tier) => [`palette ${i} tier ${tier}`, c])),
     ['steel', STEEL_COLOR],
     ...DROP_TYPES.map((type) => [`${type} capsule`, DROP_COLORS[type]]),
+    ['ball', BALL_COLOR],
+    ['trail', TRAIL_COLOR],
+    ['paddle', PADDLE_COLOR],
   ];
   for (const [label, color] of named) {
     for (const channel of color) assert.ok(channel >= 0 && channel <= 1, `${label} channel in range`);
@@ -413,4 +418,57 @@ test('a capsule is caught exactly where it overlaps the drawn paddle', () => {
   g.tick(0);
   assert.equal(g.view().drops.length, 0, 'caught as soon as they touch');
   assert.ok(g.snapshot().wide > 0, 'and the effect is granted');
+});
+
+// The ball used to be the exact same Float32Array as palette 0's top tier, and
+// four of the five palettes topped out on a near-white that read as the ball
+// mid-flight. Neutral is now the ball's alone, and the gate says so in the only
+// terms that matter on screen: how far every other body is from it.
+test('neutral white belongs to the ball, and the trail is the ball dimmed', () => {
+  const spread = (c) => Math.max(...c) - Math.min(...c);
+  const apart = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  assert.ok(spread(BALL_COLOR) < 0.1, `the ball is neutral (spread ${spread(BALL_COLOR).toFixed(3)})`);
+  const bodies = [
+    ...PALETTES.flatMap((p, i) => p.map((c, tier) => [`palette ${i} tier ${tier}`, c])),
+    ['steel', STEEL_COLOR],
+    ...DROP_TYPES.map((type) => [`${type} capsule`, DROP_COLORS[type]]),
+    ['paddle', PADDLE_COLOR],
+  ];
+  for (const [label, color] of bodies) {
+    assert.ok(apart(color, BALL_COLOR) >= 0.3,
+      `${label} ${[...color]} is only ${apart(color, BALL_COLOR).toFixed(3)} from the ball in RGB`);
+  }
+  // Derived, not picked: a hand-chosen trail colour drifted onto the paddle's
+  // own teal and read as a second body streaming out of the ball.
+  const ratio = TRAIL_COLOR[0] / BALL_COLOR[0];
+  assert.ok(ratio > 0.4 && ratio < 0.85, `the trail is a dimmed ball (x${ratio.toFixed(2)})`);
+  for (let i = 0; i < 3; i++) {
+    assert.ok(Math.abs(TRAIL_COLOR[i] - BALL_COLOR[i] * ratio) < 1e-6, `trail channel ${i} follows the ball`);
+  }
+});
+
+// The shell is the only scenery the ball is meant to bounce off, so it has to
+// stand on the collision planes and stay out of the way of everything drawn on
+// the play plane — and stay visibly behind the wall it frames.
+test('the arena shell stands on the bounce planes and never reaches the bricks', () => {
+  assert.ok(ARENA_BACK + WALL_T / 2 < BALL_Z - BRICK_D / 2,
+    `the back wall (front face z=${ARENA_BACK}) clears the brick slab`);
+  assert.ok(ARENA_FRONT > PADDLE_Z + PADDLE_D / 2,
+    'the side walls run past the paddle, so the plane the paddle moves in is inside the room');
+  for (const [i, rows] of PATTERNS.entries()) {
+    const bricks = parsePattern(rows);
+    for (const b of bricks) {
+      assert.ok(Math.abs(b.x) + b.w / 2 <= HALF_W,
+        `pattern ${i} brick at x=${b.x} pokes through the side wall at ${HALF_W}`);
+      assert.ok(b.y + b.h / 2 <= CEILING, `pattern ${i} brick at y=${b.y} pokes through the ceiling`);
+    }
+  }
+  // Recessive on purpose: the shell explains the boundary, it must never read
+  // as another row of bricks. Steel is the darkest thing the player can hit.
+  const bricks = [...PALETTES.flat(), STEEL_COLOR];
+  const ceiling = Math.min(...bricks.map((c) => contrast(c, BG_COLOR)));
+  assert.ok(contrast(WALL_COLOR, BG_COLOR) < ceiling,
+    `the shell reads at ${contrast(WALL_COLOR, BG_COLOR).toFixed(2)}:1, not under the dimmest brick at ${ceiling.toFixed(2)}:1`);
+  assert.ok(contrast(WALL_COLOR, BG_COLOR) > 1.1,
+    `but it is still visible against the background (${contrast(WALL_COLOR, BG_COLOR).toFixed(2)}:1)`);
 });
