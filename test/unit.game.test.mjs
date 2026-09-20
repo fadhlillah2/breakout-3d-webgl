@@ -2,11 +2,29 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, BASE_SPEED, SPEED_STEP, MAX_DT, BALL_R, PADDLE_HALF, PADDLE_Y, PADDLE_H,
-  SCORE_BRICK, SCORE_LEVEL, HALF_W, LIVES, CEILING, MIN_VX, LOST_Y,
+  SCORE_BRICK, SCORE_LEVEL, HALF_W, LIVES, CEILING, MIN_VX, MIN_VY, LOST_Y,
 } from '../src/game.js';
 
 const DT = 1 / 60;
 const PADDLE_TOP = PADDLE_Y + PADDLE_H / 2;
+const degrees = (vx, vy) => Math.atan2(vx, vy) * 180 / Math.PI; // 0 = straight up
+
+// Drops the ball onto the paddle at an exact contact point: the pre-move
+// position is compensated so one sub-step lands it on `ballX` / just inside the
+// catch window, whatever velocity it arrives with.
+const paddleBounce = ({ ballX, paddleX = 0, vx, vy }) => {
+  const g = createGame();
+  g.serve();
+  g.setPaddle(paddleX);
+  const dt = 0.001;
+  const ball = g.view().ball;
+  ball.x = ballX - vx * dt;
+  ball.y = PADDLE_TOP + BALL_R - 0.01 - vy * dt;
+  ball.vx = vx;
+  ball.vy = vy;
+  g.tick(dt);
+  return { vx: ball.vx, vy: ball.vy, angle: degrees(ball.vx, ball.vy), speed: Math.hypot(ball.vx, ball.vy) };
+};
 
 test('initial ready state: 3 lives, 40 bricks, ball attached above the paddle', () => {
   const g = createGame();
@@ -53,15 +71,27 @@ test('paddle returns a descending ball and the hit offset steers vx', () => {
   assert.ok(Math.abs(Math.hypot(ball.vx, ball.vy) - BASE_SPEED) < 1e-9);
 });
 
-test('centred paddle hit still leaves a minimum horizontal component', () => {
-  const g = createGame();
-  g.serve();
-  const ball = g.view().ball;
-  g.setPaddle(0);
-  ball.x = 0; ball.y = PADDLE_TOP + BALL_R - 0.01; ball.vx = 0; ball.vy = -4;
-  g.tick(0.02);
-  assert.ok(Math.abs(ball.vx) >= MIN_VX - 1e-9, `|vx| ${ball.vx} >= ${MIN_VX}`);
-  assert.ok(ball.vy > 0, 'vy flips back up');
+test('a centred paddle hit leaves at the minimum bounce angle, never straight up', () => {
+  const b = paddleBounce({ ballX: 0, paddleX: 0, vx: 0, vy: -4 });
+  assert.ok(Math.abs(Math.abs(b.angle) - 16) < 1e-6, `|angle| ${b.angle} === 16`);
+  assert.ok(b.vy > 0, 'vy flips back up');
+  assert.ok(Math.abs(b.speed - BASE_SPEED) < 1e-9, 'speed is the level speed');
+});
+
+test('the paddle exit angle is a pure function of the contact offset', () => {
+  const steep = paddleBounce({ ballX: 0.4, paddleX: 0, vx: 0, vy: -3 });
+  const shallow = paddleBounce({ ballX: 0.4, paddleX: 0, vx: -3, vy: -2 });
+  assert.ok(Math.abs(steep.angle - shallow.angle) < 1e-9,
+    `same contact point, same exit angle (${steep.angle} vs ${shallow.angle})`);
+});
+
+test('the contact offset fans the exit angle from 16 to 60 degrees', () => {
+  const at = (offset) => paddleBounce({ ballX: offset * PADDLE_HALF, paddleX: 0, vx: 0, vy: -3 }).angle;
+  assert.ok(Math.abs(at(0.5) - 30) < 1e-6, `half-way out -> 30deg (got ${at(0.5)})`);
+  assert.ok(Math.abs(at(1) - 60) < 1e-6, `paddle tip -> 60deg (got ${at(1)})`);
+  assert.ok(Math.abs(at(-1) + 60) < 1e-6, `left tip -> -60deg (got ${at(-1)})`);
+  // the middle third used to collapse onto one angle; it must steer now
+  assert.ok(at(0.34) > at(0.28) && at(0.28) > at(0.0), 'the middle third still steers');
 });
 
 test('edge hit just inside the paddle still returns; just outside falls through', () => {
@@ -314,4 +344,50 @@ test('a non-finite paddle position is ignored, at the root', () => {
   g.serve();
   g.tick(DT);
   assert.ok(Number.isFinite(g.view().ball.x), 'play continues from a finite ball');
+});
+
+test('a near-horizontal brick bounce is floored in vy, not only in vx', () => {
+  const g = createGame();
+  g.serve();
+  g.view().bricks[0].alive = false; // isolate the left face under test
+  const ball = g.view().ball;
+  const brick = g.view().bricks[1];
+  ball.x = brick.x - brick.w / 2 - BALL_R + 0.02; ball.y = brick.y; ball.vx = 4; ball.vy = 0.01;
+  const speed = Math.hypot(ball.vx, ball.vy);
+  g.tick(0.005);
+  assert.equal(g.snapshot().bricksLeft, 38);
+  assert.ok(Math.abs(ball.vy) >= MIN_VY - 1e-9, `|vy| ${ball.vy} >= ${MIN_VY}`);
+  assert.ok(Math.abs(ball.vx) >= MIN_VX - 1e-9, `|vx| ${ball.vx} >= ${MIN_VX}`);
+  assert.ok(Math.abs(Math.hypot(ball.vx, ball.vy) - speed) < 1e-9, 'speed preserved');
+});
+
+test('the brick wall is centred and both outer faces stay inside the ball reach', () => {
+  const bricks = createGame().view().bricks;
+  const lo = Math.min(...bricks.map((b) => b.x - b.w / 2));
+  const hi = Math.max(...bricks.map((b) => b.x + b.w / 2));
+  assert.ok(Math.abs(lo + hi) < 1e-9, `wall centred (${lo} .. ${hi})`);
+  assert.ok(lo >= -(HALF_W - BALL_R) - 1e-9, `left face reachable (${lo})`);
+  assert.ok(hi <= HALF_W - BALL_R + 1e-9, `right face reachable (${hi})`);
+});
+
+test('the brick separation push cannot shove the ball through a side wall', () => {
+  const g = createGame();
+  g.serve();
+  const ball = g.view().ball;
+  const brick = g.view().bricks.reduce((a, b) => (b.x < a.x ? b : a));
+  ball.x = -(HALF_W - BALL_R); ball.y = brick.y; ball.vx = 0; ball.vy = 0;
+  g.tick(0.005);
+  assert.ok(ball.x >= -(HALF_W - BALL_R) - 1e-9, `stays inside the wall (x ${ball.x})`);
+});
+
+test('a brick overlapped by a ball moving away from it is not destroyed', () => {
+  const g = createGame();
+  g.serve();
+  const ball = g.view().ball;
+  const brick = g.view().bricks[1];
+  ball.x = brick.x; ball.y = brick.y - brick.h / 2 - BALL_R + 0.02; ball.vx = 0; ball.vy = -0.5;
+  g.tick(0.002);
+  assert.equal(g.snapshot().bricksLeft, 40, 'no bounce, no kill');
+  assert.equal(g.snapshot().score, 0);
+  assert.ok(ball.vy < 0, 'velocity untouched, only pushed out');
 });

@@ -21,6 +21,7 @@ export const MAX_SPEED = 7.0;
 export const MAX_DT = 0.05;
 export const SUB_DT = 0.02;
 export const MIN_VX = 1.2;
+export const MIN_VY = 0.9;
 export const LOST_Y = 0.2;
 export const LIVES = 3;
 export const SCORE_BRICK = 10;
@@ -39,6 +40,14 @@ export const COLORS = [
 
 const SERVE_DIR = [0.26, 0.966];
 const LOST_TIME = 0.8;
+// The paddle bounce fan. The exit angle comes from the contact offset alone, so
+// the middle of the paddle steers exactly as much as the tips do.
+const PADDLE_MIN_ANGLE = 16 * Math.PI / 180;
+const PADDLE_MAX_ANGLE = 60 * Math.PI / 180;
+// Column pitch that centres the wall and puts both outer brick faces exactly on
+// the limit of where the ball centre can travel, so no brick is out of reach.
+const BRICK_PITCH = (2 * (HALF_W - BALL_R) - BRICK_W) / (BRICK_COLS - 1);
+const X_LIMIT = HALF_W - BALL_R;
 
 const normalize2 = (v) => {
   const len = Math.hypot(v[0], v[1]) || 1;
@@ -54,7 +63,7 @@ export function createGame({ best = 0 } = {}) {
     for (let row = 0; row < BRICK_ROWS; row++) {
       for (let col = 0; col < BRICK_COLS; col++) {
         bricks.push({
-          x: -3.6 + col * 1.0,
+          x: (col - (BRICK_COLS - 1) / 2) * BRICK_PITCH,
           y: 2.6 + row * 0.6,
           w: BRICK_W,
           h: BRICK_H,
@@ -69,7 +78,7 @@ export function createGame({ best = 0 } = {}) {
   const paddleTop = () => PADDLE_Y + PADDLE_H / 2;
 
   const attachBall = () => {
-    state.ball = { x: state.paddleX, y: paddleTop() + BALL_R + 0.05, z: BALL_Z, vx: 0, vy: 0 };
+    state.ball = { x: state.paddleX, y: paddleTop() + BALL_R, z: BALL_Z, vx: 0, vy: 0 };
   };
 
   const bricksLeft = () => state.bricks.reduce((n, b) => n + (b.alive ? 1 : 0), 0);
@@ -106,19 +115,26 @@ export function createGame({ best = 0 } = {}) {
     state.paddleX = Math.max(-limit, Math.min(limit, x));
     if (state.state === 'ready') {
       state.ball.x = state.paddleX;
-      state.ball.y = paddleTop() + BALL_R + 0.05;
+      state.ball.y = paddleTop() + BALL_R;
       state.ball.z = BALL_Z;
     }
   };
 
   const nudgePaddle = (dir, dt) => setPaddle(state.paddleX + dir * PADDLE_SPEED * dt);
 
-  // Arcade guard: after any bounce keep a minimum horizontal component, so the
-  // ball always sweeps across columns instead of stalling in a vertical line.
-  // Speed is preserved; only the angle is clamped.
+  // Arcade guard for brick and wall bounces: keep both components off zero, so
+  // the ball neither stalls in a vertical line nor crawls along a horizontal
+  // one. Speed is preserved; only the angle is clamped. The paddle does not use
+  // this — its exit angle is set outright from the contact offset.
   const clampAngle = () => {
     const ball = state.ball;
     const speed = Math.hypot(ball.vx, ball.vy) || state.speed;
+    // Vertical floor before the horizontal early-return: after it, this branch
+    // would be dead for exactly the bounces that produce a crawling ball.
+    if (Math.abs(ball.vy) < MIN_VY) {
+      ball.vy = (ball.vy >= 0 ? 1 : -1) * MIN_VY;
+      ball.vx = (ball.vx >= 0 ? 1 : -1) * Math.sqrt(Math.max(0, speed * speed - MIN_VY * MIN_VY));
+    }
     if (Math.abs(ball.vx) >= MIN_VX) return;
     const sign = ball.vx !== 0 ? Math.sign(ball.vx) : (ball.x >= 0 ? 1 : -1);
     ball.vx = sign * MIN_VX;
@@ -146,8 +162,8 @@ export function createGame({ best = 0 } = {}) {
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
 
-    if (ball.x < -(HALF_W - BALL_R)) { ball.x = -(HALF_W - BALL_R); ball.vx = Math.abs(ball.vx); }
-    else if (ball.x > HALF_W - BALL_R) { ball.x = HALF_W - BALL_R; ball.vx = -Math.abs(ball.vx); }
+    if (ball.x < -X_LIMIT) { ball.x = -X_LIMIT; ball.vx = Math.abs(ball.vx); }
+    else if (ball.x > X_LIMIT) { ball.x = X_LIMIT; ball.vx = -Math.abs(ball.vx); }
     if (ball.y > CEILING - BALL_R) { ball.y = CEILING - BALL_R; ball.vy = -Math.abs(ball.vy); }
 
     // Brick collision: exact circle-vs-rect contact, reflected about the
@@ -182,13 +198,15 @@ export function createGame({ best = 0 } = {}) {
       }
       ball.x += ux * push;
       ball.y += uy * push;
+      ball.x = Math.max(-X_LIMIT, Math.min(X_LIMIT, ball.x)); // separation must not push through a wall
       const dot = ball.vx * ux + ball.vy * uy;
+      // No bounce, no kill: a ball already leaving the brick only gets pushed out.
       if (dot < 0) {
         ball.vx -= 2 * dot * ux;
         ball.vy -= 2 * dot * uy;
+        clampAngle();
+        if (clearBrick(brick)) return;
       }
-      clampAngle();
-      if (clearBrick(brick)) return;
     }
 
     // Paddle: only a descending ball arriving from above the paddle top, inside
@@ -198,14 +216,12 @@ export function createGame({ best = 0 } = {}) {
       && ball.y <= paddleTop() + BALL_R
       && ball.y >= paddleTop()
       && Math.abs(ball.x - state.paddleX) <= PADDLE_HALF + BALL_R) {
-      const offset = (ball.x - state.paddleX) / PADDLE_HALF;
+      const offset = Math.max(-1, Math.min(1, (ball.x - state.paddleX) / PADDLE_HALF));
       ball.y = paddleTop() + BALL_R;
-      ball.vy = Math.abs(ball.vy);
-      ball.vx = Math.max(-1, Math.min(1, offset)) * 3.2;
-      const dir = normalize2([ball.vx, ball.vy]);
-      ball.vx = dir[0] * state.speed;
-      ball.vy = dir[1] * state.speed;
-      clampAngle();
+      const side = offset < 0 ? -1 : 1; // dead centre is a fixed tie-break, not a coin flip
+      const angle = side * Math.max(PADDLE_MIN_ANGLE, Math.abs(offset) * PADDLE_MAX_ANGLE);
+      ball.vx = Math.sin(angle) * state.speed;
+      ball.vy = Math.cos(angle) * state.speed;
       return;
     }
 
@@ -244,6 +260,8 @@ export function createGame({ best = 0 } = {}) {
     }
     // Adaptive sub-stepping: never advance more than half a ball radius per
     // step, so fast balls cannot skip a brick face or a paddle catch window.
+    // The 16 is only a safety belt — the worst legal frame (MAX_DT at
+    // MAX_SPEED) needs 6 sub-steps, so the cap never binds in play.
     const speed = Math.hypot(state.ball.vx, state.ball.vy);
     const n = Math.min(16, Math.max(1, Math.ceil((d * speed) / (BALL_R * 0.5))));
     const sub = d / n;
