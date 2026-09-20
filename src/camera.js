@@ -6,18 +6,30 @@ import { lookAt, multiply, perspective } from './math.js';
 // Far enough back that the whole arena fits the frame now that the brick wall is
 // drawn on the play plane instead of 5.65 units behind it.
 const REST = [0, 3.6, 14.5];
+const REST_TARGET = [0, 1.8, 1.5];
 export const EYE = new Float32Array(REST);
-const TARGET = [0, 1.8, 1.5];
+// The target shakes with the eye, so the shake is a pure translation. Moving the
+// eye alone only pivots the camera about a fixed target and lookAt rotates the
+// swing straight back out: measured that way, a full-trauma hit moved the ball
+// 0.1 px and a broken brick 0.02 px.
+const TARGET = new Float32Array(REST_TARGET);
 const UP = [0, 1, 0];
 const FOV = Math.PI / 3.6;
 
-// Shake, in world units at the arena plane (~82 px per unit in a 1200x675
-// frame): a full-trauma swing is ~18 px, which reads as a hit rather than as a
-// polite wobble. Trauma decays in ~0.55 s and is squared, so it lands hard and
-// leaves quickly.
+// Shake, in world units at the play plane, which is ~82 px per unit in a
+// 1200x675 frame. Amplitude follows trauma linearly: squaring it put the two
+// commonest impacts at 3 px and 1 px. Measured peak displacement of the ball in
+// that frame — 18.8 px on a lost ball, 8.1 px on a broken brick, 3.9 px on a
+// chip — and trauma decays in ~0.55 s, so a hit lands hard and leaves quickly.
 const SHAKE_AMP = 0.22;
 const SHAKE_FREQ = 27;
 const TRAUMA_DECAY = 1.8;
+
+// How much each impact adds. They live here because what they buy is measured
+// here: test/unit.camera.test.mjs gates the screen shift each one produces.
+export const TRAUMA_CHIP = 0.3;
+export const TRAUMA_BREAK = 0.5;
+export const TRAUMA_LOST = 1;
 
 let trauma = 0;
 let elapsed = 0;
@@ -34,9 +46,12 @@ export function stepCamera(dt) {
   if (trauma <= 0) return;
   elapsed += dt;
   trauma = Math.max(0, trauma - TRAUMA_DECAY * dt);
-  const k = trauma * trauma;
-  EYE[0] = REST[0] + Math.sin(elapsed * SHAKE_FREQ) * SHAKE_AMP * k;
-  EYE[1] = REST[1] + Math.sin(elapsed * SHAKE_FREQ * 1.7 + 1.3) * SHAKE_AMP * 0.7 * k;
+  const dx = Math.sin(elapsed * SHAKE_FREQ) * SHAKE_AMP * trauma;
+  const dy = Math.sin(elapsed * SHAKE_FREQ * 1.7 + 1.3) * SHAKE_AMP * 0.7 * trauma;
+  EYE[0] = REST[0] + dx;
+  EYE[1] = REST[1] + dy;
+  TARGET[0] = REST_TARGET[0] + dx;
+  TARGET[1] = REST_TARGET[1] + dy;
   moved = true;
 }
 
@@ -45,6 +60,7 @@ export function resetCamera() {
   trauma = 0;
   elapsed = 0;
   EYE.set(REST);
+  TARGET.set(REST_TARGET);
   moved = true;
 }
 

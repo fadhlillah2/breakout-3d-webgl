@@ -4,7 +4,7 @@
 import { hash01 } from './game.js';
 
 export const SHARD_PER_BRICK = 12;
-export const SHARD_BRICKS = 5;      // how many simultaneous bursts the pool holds
+const SHARD_BRICKS = 5;             // how many simultaneous bursts the pool holds
 export const SHARD_LIFE = 0.6;      // seconds
 export const SHARD_GRAVITY = 9.8;
 export const SHARD_SIZE = 0.09;
@@ -14,17 +14,18 @@ const SHARD_LIFT = 1.3;             // upward bias, so the burst arcs instead of
 const SPREAD_X = 0.30;              // shards start spread over the brick's own face
 const SPREAD_Y = 0.16;
 
-export function createShards({ bricks = SHARD_BRICKS } = {}) {
+export function createShards() {
   const pool = [];
-  for (let i = 0; i < SHARD_PER_BRICK * bricks; i++) {
-    pool.push({ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, life: 0, tier: 0 });
+  for (let i = 0; i < SHARD_PER_BRICK * SHARD_BRICKS; i++) {
+    pool.push({ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, life: 0, color: null });
   }
   let next = 0;
   return {
     pool,
-    // `seed` is the brick, so the same replay throws the same debris; `tier` is
-    // the brick's palette slot, so the pieces keep the colour they broke off.
-    spawn(x, y, z, seed, tier = 0) {
+    // `seed` is the brick, so the same replay throws the same debris; `color` is
+    // resolved by the caller at spawn time, because the brick that closes a
+    // level is already gone from the palette by the time its pieces land.
+    spawn(x, y, z, seed, color = null) {
       for (let i = 0; i < SHARD_PER_BRICK; i++) {
         const p = pool[next];
         next = (next + 1) % pool.length;
@@ -37,7 +38,7 @@ export function createShards({ bricks = SHARD_BRICKS } = {}) {
         p.vx = Math.cos(angle) * speed;
         p.vy = Math.sin(angle) * speed + SHARD_LIFT;
         p.vz = (hash01(seed, i, 31) - 0.5) * 2.2;
-        p.tier = tier;
+        p.color = color;
         p.life = SHARD_LIFE;
       }
     },
@@ -51,7 +52,6 @@ export function createShards({ bricks = SHARD_BRICKS } = {}) {
         p.z += p.vz * dt;
       }
     },
-    clear() { for (const p of pool) p.life = 0; },
   };
 }
 
@@ -60,7 +60,7 @@ export function createShards({ bricks = SHARD_BRICKS } = {}) {
 export const TRAIL_STEP = 0.18;
 export const TRAIL_MAX = 7;
 
-export function createTrail({ step = TRAIL_STEP, max = TRAIL_MAX } = {}) {
+export function createTrail() {
   const points = [];
   let lastX = null;
   let lastY = 0;
@@ -68,11 +68,11 @@ export function createTrail({ step = TRAIL_STEP, max = TRAIL_MAX } = {}) {
     points,
     reset() { points.length = 0; lastX = null; },
     sample(x, y, z) {
-      if (lastX !== null && Math.hypot(x - lastX, y - lastY) < step) return false;
+      if (lastX !== null && Math.hypot(x - lastX, y - lastY) < TRAIL_STEP) return false;
       lastX = x;
       lastY = y;
       points.unshift({ x, y, z });
-      if (points.length > max) points.length = max;
+      if (points.length > TRAIL_MAX) points.length = TRAIL_MAX;
       return true;
     },
   };

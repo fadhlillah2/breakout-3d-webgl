@@ -6,7 +6,10 @@ import {
   TRAIL_COLOR,
 } from './game.js';
 import { createRenderer } from './gl.js';
-import { EYE, addTrauma, projectPoint, resetCamera, stepCamera, viewProjection } from './camera.js';
+import {
+  EYE, TRAUMA_BREAK, TRAUMA_CHIP, TRAUMA_LOST, addTrauma, projectPoint, resetCamera, stepCamera,
+  viewProjection,
+} from './camera.js';
 import { createShards, createTrail, SHARD_LIFE, SHARD_SIZE } from './fx.js';
 import { createSfx } from './sfx.js';
 import { getStorage, readBest, writeBest } from './storage.js';
@@ -97,15 +100,13 @@ function start(renderer) {
   const held = { left: false, right: false };
 
   // Impact feedback, tuned to be felt rather than to be polite: a broken brick
-  // freezes the simulation for 90 ms while the camera keeps shaking (~18 px at
-  // full trauma), the paddle squashes to 40 % of its height, and a lost ball
-  // pulls the whole background towards red for half a second.
+  // freezes the simulation for 90 ms while the camera keeps shaking (8 px of
+  // arena at that trauma, 19 px on a lost ball), the paddle squashes to 40 % of
+  // its height, and a lost ball pulls the background towards red for half a
+  // second. The trauma each one is worth lives in camera.js, where it is gated.
   const HIT_STOP_CHIP = 0.045;
   const HIT_STOP_BREAK = 0.09;
   const HIT_STOP_LOST = 0.14;
-  const TRAUMA_CHIP = 0.3;
-  const TRAUMA_BREAK = 0.5;
-  const TRAUMA_LOST = 1;
   const SQUASH_TIME = 0.16;
   const SQUASH_DEPTH = 0.6;
   const LOST_FLASH_TIME = 0.5;
@@ -170,9 +171,10 @@ function start(renderer) {
     pop(event.x, event.y, event.combo > 1 ? `+${event.points} ×${event.combo}` : `+${event.points}`,
       event.combo > 1 ? 'combo' : '');
     if (!FX) return;
-    // The tier travels with the event: by now the wall may already have been
-    // replaced by the next level's, and bricks[index] would be a stranger.
-    shards.spawn(event.x, event.y, BALL_Z, event.index, event.tier);
+    // Tier and level both travel with the event: by now the wall may already
+    // have been replaced by the next level's, and neither bricks[index] nor the
+    // running palette would still describe the brick that just broke.
+    shards.spawn(event.x, event.y, BALL_Z, event.index, levelPalette(event.level)[event.tier]);
     hitStop = Math.max(hitStop, HIT_STOP_BREAK);
     addTrauma(TRAUMA_BREAK);
   };
@@ -204,13 +206,15 @@ function start(renderer) {
     shards.step(dt);
     squash = Math.max(0, squash - dt / SQUASH_TIME);
     lostFlash = Math.max(0, lostFlash - dt / LOST_FLASH_TIME);
-    // The wall only falls while the board is idle: the moment the ball is live,
-    // every brick must be drawn exactly where the physics says it is.
-    wallDrop = view.state === 'ready' ? Math.max(0, wallDrop - dt) : 0;
+    wallDrop = Math.max(0, wallDrop - dt);
   };
 
-  const brickLift = (index) => {
-    if (wallDrop <= 0) return 0;
+  // The wall only falls while the board is idle: the moment the ball is live,
+  // every brick must be drawn exactly where the physics says it is. The state is
+  // read here rather than in stepFx because serve, resize and the deterministic
+  // modes all draw without ever going round the loop.
+  const brickLift = (index, state) => {
+    if (wallDrop <= 0 || state !== 'ready') return 0;
     const t = (WALL_DROP_TIME - wallDrop - index * WALL_DROP_STAGGER) / WALL_DROP_FALL;
     const eased = Math.min(1, Math.max(0, t));
     return (1 - eased) ** 3 * WALL_DROP_RISE;
@@ -258,7 +262,7 @@ function start(renderer) {
       if (!brick.alive) continue;
       // On the play plane, not 5.65 units behind it: a brick may only break
       // where the ball is seen to touch it.
-      const y = brick.y + brickLift(i);
+      const y = brick.y + brickLift(i, snap.state);
       // Steel gets the world-space grid lines, so it reads as a different
       // material without a second shader.
       if (brick.solid) {
@@ -272,18 +276,19 @@ function start(renderer) {
     for (const shard of shards.pool) {
       if (shard.life <= 0) continue;
       const s = SHARD_SIZE * (shard.life / SHARD_LIFE);
-      renderer.drawCube(shard.x, shard.y, shard.z, s, s, s, palette[shard.tier] || palette[0], 0, 0, 0.4);
+      renderer.drawCube(shard.x, shard.y, shard.z, s, s, s, shard.color, 0, 0, 0.4);
     }
     for (const drop of view.drops) {
       renderer.drawCube(drop.x, drop.y, BALL_Z, DROP_W, DROP_H, DROP_H, DROP_COLORS[drop.type], 0, 0, 0.3);
     }
     // Drawn from the same half-width the physics catches with, so a widened or
-    // shrunken paddle is never a lie on screen. The catch squash only compresses
-    // the box downward — the top face stays exactly on the catch line, and the
-    // width never leaves the hitbox. In front of the ball's depth slab, so
-    // paddle and ball never interpenetrate.
+    // shrunken paddle is never a lie on screen. The catch squash takes its
+    // height off the bottom only: the top face stays on the catch line the ball
+    // is caught at, and the width never leaves the hitbox. In front of the
+    // ball's depth slab, so paddle and ball never interpenetrate.
     const paddleH = PADDLE_H * (1 - SQUASH_DEPTH * squash);
-    renderer.drawCube(view.paddleX, PADDLE_Y - (PADDLE_H - paddleH) / 2, PADDLE_Z + PADDLE_D / 2,
+    const paddleCy = PADDLE_Y + (PADDLE_H - paddleH) / 2;
+    renderer.drawCube(view.paddleX, paddleCy, PADDLE_Z + PADDLE_D / 2,
       snap.paddleHalf * 2, paddleH, PADDLE_D, PADDLE_COLOR, 0, 0, 0.7 * squash);
     // A lost ball stops being drawn at the floor instead of sinking through it.
     if (lit) {
@@ -311,6 +316,9 @@ function start(renderer) {
       setStatus('lives', snap.lives);
       setStatus('level', snap.level);
       setStatus('bricks', snap.bricksLeft);
+      // The box the paddle was drawn in, top face first: the squash must never
+      // move it off the line the physics catches on.
+      setStatus('paddle', `${(paddleCy + paddleH / 2).toFixed(4)},${squash.toFixed(3)}`);
     }
   };
 
@@ -491,11 +499,16 @@ function start(renderer) {
 
   // Deterministic modes (smoke test + screenshot): results pinned.
   if (params.get('autotest') === '1') {
+    // The scenario runs through the loop's own feedback pipeline, so the frame
+    // the harness dumps holds the debris, trail and squash the run really
+    // produced. Hit-stop is the one part left out: the tick sequence itself is
+    // the contract Node computes the expectations from.
+    const fx = { onTick: (dt) => { consume(game.view().events); stepFx(dt); stepCamera(dt); } };
     const end = params.get('end');
-    if (end === 'miss') playMiss(game);
-    else if (end === 'over') playEndOver(game);
-    else if (end === 'deep') playTracking(game, { ticks: DEEP_TICKS });
-    else playTracking(game);
+    if (end === 'miss') playMiss(game, fx);
+    else if (end === 'over') playEndOver(game, fx);
+    else if (end === 'deep') playTracking(game, { ...fx, ticks: DEEP_TICKS });
+    else playTracking(game, fx);
     syncStatus();
     render();
     return;
@@ -508,7 +521,10 @@ function start(renderer) {
     const ticks = Math.min(Math.max(Number.isFinite(asked) ? asked : 480, 0), 5000);
     playTracking(game, { ticks: Math.max(0, ticks - 15) });
     for (let i = 0; i < 15; i++) {
-      if (game.snapshot().state === 'playing') game.tick(1 / 60);
+      // Sampled under the same condition the loop uses, so the captured tail can
+      // never be one the game itself would not have drawn.
+      if (game.snapshot().state !== 'playing') break;
+      game.tick(1 / 60);
       const ball = game.view().ball;
       trail.sample(ball.x, ball.y, ball.z);
     }

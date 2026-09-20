@@ -204,9 +204,11 @@ export function createGame({ best = 0 } = {}) {
   const emit = (event) => { state.events.push(event); };
   const emitWall = () => emit({ type: 'wall', x: state.ball.x, y: state.ball.y });
   // Every brick contact reports the same shape: where it was, which palette tier
-  // it wore, whether it broke, and what the rally paid for it.
+  // of which level it wore, whether it broke, and what the rally paid for it.
+  // The level travels with it because a brick that closes the wall is emitted
+  // before the level number moves on.
   const emitBrick = (brick, index, destroyed, points) => emit({
-    type: 'brick', x: brick.x, y: brick.y, index, tier: brick.c,
+    type: 'brick', x: brick.x, y: brick.y, index, tier: brick.c, level: state.level,
     destroyed, solid: brick.solid, points, combo: state.combo,
   });
 
@@ -323,8 +325,9 @@ export function createGame({ best = 0 } = {}) {
       const drop = state.drops[i];
       drop.y -= DROP_SPEED * dt;
       // Caught anywhere in the paddle's own band, not only on its top face (a
-      // capsule is a pickup, so it is forgiving where the ball is strict) — but
-      // the band is the drawn cube, so nothing is picked up out of thin air.
+      // capsule is a pickup, so it is forgiving where the ball is strict). The
+      // band is the paddle's full box, so nothing is picked up out of thin air —
+      // except for the 0.16 s the catch squash in main.js draws it shorter.
       if (drop.y - DROP_H / 2 <= paddleTop()
         && drop.y + DROP_H / 2 >= PADDLE_Y - PADDLE_H / 2
         && Math.abs(drop.x - state.paddleX) <= paddleHalf() + DROP_W / 2) {
