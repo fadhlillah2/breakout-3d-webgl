@@ -38,9 +38,10 @@ live `?shot=1` scene (with an anti-fabrication DOM guard).
 
 ## How it works
 
-- `src/game.js` — DOM-free arena: sub-stepped physics (≤0.02 s) with a swept
-  brick-plane test so the ball cannot tunnel at max speed; paddle steering;
-  score/lives/levels; deterministic (no randomness).
+- `src/game.js` — DOM-free arena on a classic breakout play plane at a fixed
+  depth: sub-stepped physics (≤0.02 s), deepest-overlap brick resolution along
+  the shallowest axis, and a minimum horizontal component after every paddle
+  return so the ball can never lock into a vertical loop.
 - `src/gl.js` + `src/cube.js` — one shader program, one cube mesh, flat shading,
   distance fog, and a floor grid in the fragment shader (shared with the
   tower-stack-webgl demo).
@@ -49,9 +50,10 @@ live `?shot=1` scene (with an anti-fabrication DOM guard).
 
 ## Limitations
 
-- The paddle returns the ball anywhere along its x-range at any height ("x-shield"),
-  a common simplification for 3D breakout clones; the floor reflects, so the only
-  way to lose a ball is behind the paddle.
+- Gameplay is a classic 2D breakout plane rendered in 3D: the ball travels in
+  x/y at a fixed depth, the brick wall stands behind it, and the paddle only
+  returns balls that reach its own height. There is no depth travel — an earlier
+  fully-3D ball model produced phantom mid-air returns and vertical locks.
 - Bricks are one hit each; no power-ups, audio, accounts, or leaderboard.
 - Requires WebGL2; without it a fallback message is shown.
 - The smoke test runs Chrome with SwiftShader: it verifies correctness, not GPU performance.

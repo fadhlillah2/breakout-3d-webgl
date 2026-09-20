@@ -1,9 +1,17 @@
 // Breakout 3D game logic — no DOM, no WebGL. Pure state + math so Node tests,
 // the browser smoke test, and the screenshot tool all drive the same code.
+//
+// Gameplay is a classic breakout plane (x/y) at a fixed depth, rendered in 3D:
+// the ball and paddle live on the play plane, the brick wall stands behind them.
+// That keeps every bounce physical — the paddle only returns balls that reach
+// its own height — and avoids the depth-travel artefacts of a fully 3D ball.
 
 export const HALF_W = 4.0;
 export const CEILING = 6.0;
 export const BALL_R = 0.12;
+export const BALL_Z = 5.8;
+export const PADDLE_Y = 0.4;
+export const PADDLE_H = 0.3;
 export const PADDLE_Z = 6.0;
 export const PADDLE_HALF = 0.8;
 export const PADDLE_SPEED = 7.0;
@@ -12,6 +20,8 @@ export const SPEED_STEP = 0.4;
 export const MAX_SPEED = 8.0;
 export const MAX_DT = 0.05;
 export const SUB_DT = 0.02;
+export const MIN_VX = 1.2;
+export const LOST_Y = 0.2;
 export const LIVES = 3;
 export const SCORE_BRICK = 10;
 export const SCORE_LEVEL = 100;
@@ -26,15 +36,15 @@ export const COLORS = [
   [0.93, 0.95, 0.97], // off-white #eef2f8
 ];
 
-const SERVE_DIR = [0.25, 0.55, -0.79];
+const SERVE_DIR = [0.26, 0.966];
 const LOST_TIME = 0.8;
 
-const normalize3 = (v) => {
-  const len = Math.hypot(v[0], v[1], v[2]) || 1;
-  return [v[0] / len, v[1] / len, v[2] / len];
+const normalize2 = (v) => {
+  const len = Math.hypot(v[0], v[1]) || 1;
+  return [v[0] / len, v[1] / len];
 };
 
-export function createGame({ best = 0, reduced = false } = {}) {
+export function createGame({ best = 0 } = {}) {
   let allTimeBest = best;
   let state = null;
 
@@ -55,8 +65,10 @@ export function createGame({ best = 0, reduced = false } = {}) {
     return bricks;
   };
 
+  const paddleTop = () => PADDLE_Y + PADDLE_H / 2;
+
   const attachBall = () => {
-    state.ball = { x: state.paddleX, y: 0.55, z: PADDLE_Z - 0.35, vx: 0, vy: 0, vz: 0 };
+    state.ball = { x: state.paddleX, y: paddleTop() + BALL_R + 0.05, z: BALL_Z, vx: 0, vy: 0 };
   };
 
   const bricksLeft = () => state.bricks.reduce((n, b) => n + (b.alive ? 1 : 0), 0);
@@ -80,10 +92,9 @@ export function createGame({ best = 0, reduced = false } = {}) {
 
   const serve = () => {
     if (state.state !== 'ready') return;
-    const dir = normalize3(SERVE_DIR);
+    const dir = normalize2(SERVE_DIR);
     state.ball.vx = dir[0] * state.speed;
     state.ball.vy = dir[1] * state.speed;
-    state.ball.vz = dir[2] * state.speed;
     state.state = 'playing';
   };
 
@@ -92,21 +103,12 @@ export function createGame({ best = 0, reduced = false } = {}) {
     state.paddleX = Math.max(-limit, Math.min(limit, x));
     if (state.state === 'ready') {
       state.ball.x = state.paddleX;
-      state.ball.y = 0.55;
-      state.ball.z = PADDLE_Z - 0.35;
+      state.ball.y = paddleTop() + BALL_R + 0.05;
+      state.ball.z = BALL_Z;
     }
   };
 
   const nudgePaddle = (dir, dt) => setPaddle(state.paddleX + dir * PADDLE_SPEED * dt);
-
-  const hitBrick = (x, y) => {
-    for (const brick of state.bricks) {
-      if (!brick.alive) continue;
-      if (Math.abs(x - brick.x) <= brick.w / 2 + BALL_R * 0.5
-        && Math.abs(y - brick.y) <= brick.h / 2 + BALL_R * 0.5) return brick;
-    }
-    return null;
-  };
 
   const clearBrick = (brick) => {
     brick.alive = false;
@@ -125,52 +127,63 @@ export function createGame({ best = 0, reduced = false } = {}) {
 
   const stepPhysics = (dt) => {
     const ball = state.ball;
-    const prevZ = ball.z;
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
-    ball.z += ball.vz * dt;
 
     if (ball.x < -(HALF_W - BALL_R)) { ball.x = -(HALF_W - BALL_R); ball.vx = Math.abs(ball.vx); }
     else if (ball.x > HALF_W - BALL_R) { ball.x = HALF_W - BALL_R; ball.vx = -Math.abs(ball.vx); }
     if (ball.y > CEILING - BALL_R) { ball.y = CEILING - BALL_R; ball.vy = -Math.abs(ball.vy); }
-    else if (ball.y < BALL_R) { ball.y = BALL_R; ball.vy = Math.abs(ball.vy); }
 
-    // swept brick-plane tests: prevent tunnelling at max speed, from both sides
-    if (ball.vz < 0 && prevZ - BALL_R > BRICK_D && ball.z - BALL_R <= BRICK_D) {
-      const brick = hitBrick(ball.x, ball.y);
-      if (brick) {
-        ball.z = BRICK_D + BALL_R;
-        ball.vz = Math.abs(ball.vz);
-        if (clearBrick(brick)) return;
-      }
-    } else if (ball.vz > 0 && prevZ + BALL_R < BRICK_D && ball.z + BALL_R >= BRICK_D) {
-      // returning from the back wall: a live brick still blocks and breaks
-      const brick = hitBrick(ball.x, ball.y);
-      if (brick) {
-        ball.z = BRICK_D - BALL_R;
-        ball.vz = -Math.abs(ball.vz);
-        if (clearBrick(brick)) return;
-      }
+    // Brick collision on the play plane: pick the deepest overlap, resolve on
+    // its shallowest axis so the ball leaves through the face it entered.
+    let hit = null;
+    let deepest = 0;
+    for (const brick of state.bricks) {
+      if (!brick.alive) continue;
+      const dx = brick.w / 2 + BALL_R - Math.abs(ball.x - brick.x);
+      const dy = brick.h / 2 + BALL_R - Math.abs(ball.y - brick.y);
+      if (dx <= 0 || dy <= 0) continue;
+      const depth = Math.min(dx, dy);
+      if (depth > deepest) { deepest = depth; hit = { brick, dx, dy }; }
     }
-    if (ball.vz < 0 && ball.z - BALL_R <= 0) { ball.z = BALL_R; ball.vz = Math.abs(ball.vz); }
-
-    // paddle plane: x-shield (any y inside the paddle's x range returns the ball)
-    if (ball.vz > 0 && ball.z + BALL_R >= PADDLE_Z - 0.1) {
-      if (Math.abs(ball.x - state.paddleX) <= PADDLE_HALF + BALL_R) {
-        const offset = (ball.x - state.paddleX) / PADDLE_HALF;
-        ball.z = PADDLE_Z - 0.1 - BALL_R;
-        ball.vz = -Math.abs(ball.vz);
-        ball.vx = Math.max(-1, Math.min(1, offset)) * 3.2;
-        const dir = normalize3([ball.vx, ball.vy, ball.vz]);
-        ball.vx = dir[0] * state.speed;
-        ball.vy = dir[1] * state.speed;
-        ball.vz = dir[2] * state.speed;
+    if (hit) {
+      const { brick, dx, dy } = hit;
+      if (dx < dy) {
+        const sign = ball.x >= brick.x ? 1 : -1;
+        ball.x = brick.x + sign * (brick.w / 2 + BALL_R);
+        ball.vx = sign * Math.abs(ball.vx);
       } else {
-        state.state = 'life-lost';
-        state.lives -= 1;
-        state.lostTimer = LOST_TIME;
-        state.ball.vy = -2.4;
+        const sign = ball.y >= brick.y ? 1 : -1;
+        ball.y = brick.y + sign * (brick.h / 2 + BALL_R);
+        ball.vy = sign * Math.abs(ball.vy);
       }
+      if (clearBrick(brick)) return;
+    }
+
+    // Paddle: only a descending ball that reaches the paddle's own height and
+    // x-range is returned; anything else falls past it and is lost.
+    if (ball.vy < 0
+      && ball.y - BALL_R <= paddleTop()
+      && ball.y + BALL_R >= PADDLE_Y
+      && Math.abs(ball.x - state.paddleX) <= PADDLE_HALF + BALL_R) {
+      const offset = (ball.x - state.paddleX) / PADDLE_HALF;
+      ball.y = paddleTop() + BALL_R;
+      ball.vy = Math.abs(ball.vy);
+      let vx = Math.max(-1, Math.min(1, offset)) * 3.2;
+      if (Math.abs(vx) < MIN_VX) {
+        vx = (vx !== 0 ? Math.sign(vx) : (offset >= 0 ? 1 : -1)) * MIN_VX;
+      }
+      const dir = normalize2([vx, ball.vy]);
+      ball.vx = dir[0] * state.speed;
+      ball.vy = dir[1] * state.speed;
+      return;
+    }
+
+    if (ball.y < LOST_Y) {
+      state.state = 'life-lost';
+      state.lives -= 1;
+      state.lostTimer = LOST_TIME;
+      state.ball.vy = -2.4;
     }
   };
 
@@ -184,7 +197,6 @@ export function createGame({ best = 0, reduced = false } = {}) {
         state.ball.vy -= 9.8 * sub;
         state.ball.x += state.ball.vx * sub;
         state.ball.y += state.ball.vy * sub;
-        state.ball.z += state.ball.vz * sub;
       }
       state.lostTimer -= d;
       if (state.lostTimer <= 0) {
