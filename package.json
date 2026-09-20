@@ -5,8 +5,15 @@
   "description": "Breakout 3D rendered with a hand-written WebGL2 pipeline — no engine, no runtime dependencies.",
   "type": "module",
   "scripts": {
+    "start": "node tools/serve.mjs",
     "test": "node --test",
     "smoke": "node tools/smoke.mjs",
     "screenshot": "node scripts/screenshot.mjs"
+  },
+  "author": "Fadhlillah",
+  "homepage": "https://fadhlillah2.github.io/breakout-3d-webgl/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fadhlillah2/breakout-3d-webgl.git"
   }
 }

@@ -6,8 +6,8 @@
 // the scenario the way it plays the real game, and the smoke test hangs a
 // mirror of it there so the cube count stays derived rather than trusted.
 
-export const TRACK_TICKS = 1500;
-export const MISS_TICKS = 320;
+const TRACK_TICKS = 1500;
+const MISS_TICKS = 320;
 // The only sequence that reaches a frame drawing a steel brick, a cracked brick
 // and a capsule at once (level 2 pattern, ~33 ticks of slack either side).
 // tools/smoke.mjs re-asserts that in Node before trusting the browser run.

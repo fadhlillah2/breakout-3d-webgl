@@ -1,29 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  identity, multiply, perspective, lookAt, translation, scaling,
-} from '../src/math.js';
+import { multiply, perspective, lookAt } from '../src/math.js';
 
 const close = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps;
 
+// Written out rather than imported: the identity/translation/scaling helpers
+// were deleted once gl.js started composing the model matrix in closed form,
+// and a test-only helper would have been the last thing keeping them alive.
+const IDENTITY = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+
 test('multiply(identity, m) === m', () => {
-  const m = translation(2, -1, 0.5);
-  const out = multiply(identity(), m);
+  const m = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2, -1, 0.5, 1]);
+  const out = multiply(IDENTITY, m);
   for (let i = 0; i < 16; i++) assert.ok(close(out[i], m[i]), `idx ${i}`);
-});
-
-test('translation applies to a point', () => {
-  // column-major: out = M * v with v = (1,2,3,1) -> (3,1,3.5,1)
-  const m = translation(2, -1, 0.5);
-  const x = m[0] * 1 + m[4] * 2 + m[8] * 3 + m[12] * 1;
-  const y = m[1] * 1 + m[5] * 2 + m[9] * 3 + m[13] * 1;
-  const z = m[2] * 1 + m[6] * 2 + m[10] * 3 + m[14] * 1;
-  assert.ok(close(x, 3) && close(y, 1) && close(z, 3.5));
-});
-
-test('scaling multiplies axes independently', () => {
-  const m = scaling(2, 3, 4);
-  assert.ok(close(m[0], 2) && close(m[5], 3) && close(m[10], 4) && close(m[15], 1));
 });
 
 test('perspective keeps w = -z', () => {

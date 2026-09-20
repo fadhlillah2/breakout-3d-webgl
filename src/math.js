@@ -1,8 +1,6 @@
 // Minimal column-major 4x4 matrices for WebGL (Float32Array(16)), gl-matrix layout.
-export function identity() {
-  return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-}
-
+// Only what the camera builds each frame: the model matrix is composed in
+// closed form inside gl.js, so no translation/scaling/identity helper survives.
 export function multiply(a, b) {
   const out = new Float32Array(16);
   for (let c = 0; c < 4; c++) {
@@ -24,14 +22,6 @@ export function perspective(fovyRad, aspect, near, far) {
     0, 0, (far + near) * nf, -1,
     0, 0, 2 * far * near * nf, 0,
   ]);
-}
-
-export function translation(x, y, z) {
-  return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1]);
-}
-
-export function scaling(x, y, z) {
-  return new Float32Array([x, 0, 0, 0, 0, y, 0, 0, 0, 0, z, 0, 0, 0, 0, 1]);
 }
 
 export function lookAt(eye, center, up) {

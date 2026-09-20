@@ -20,8 +20,10 @@ import { DEEP_TICKS, playEndOver, playMiss, playTracking } from './autotest.js';
 const params = new URLSearchParams(location.search);
 const body = document.body;
 const setStatus = (key, value) => body.setAttribute(`data-${key}`, String(value));
-// Status attributes and gl.getError() exist for the harnesses only; getError
-// alone costs ~0.5 ms/frame because it flushes the GPU pipeline.
+// Status attributes and gl.getError() exist for the harnesses only. getError
+// forces a pipeline flush, so it is gated rather than paid for every frame;
+// the per-frame figure the audit reported was never re-measured behind this
+// gate, so no number is quoted here.
 const QA = params.get('autotest') === '1' || params.get('shot') === '1' || params.get('debug') === '1';
 const SHOT = params.get('shot') === '1';
 
@@ -375,11 +377,11 @@ function start(renderer) {
     pauseButton.setAttribute('aria-pressed', String(snap.state === 'paused'));
     if (snap.state === 'paused') {
       overlayTitle.textContent = 'Paused';
-      overlayText.textContent = 'Press Esc or the button to resume.';
+      overlayText.textContent = 'Press Esc, or click or tap the button, to resume.';
       overlayButton.textContent = 'Resume';
     } else if (snap.state === 'over') {
       overlayTitle.textContent = `Game over — score ${snap.score}`;
-      overlayText.textContent = `Best: ${snap.best}. Press Space, Enter, or click to play again.`;
+      overlayText.textContent = `Best: ${snap.best}. Space, Enter, click or tap to play again.`;
       overlayButton.textContent = 'Play again';
     } else if (snap.state === 'ready') {
       overlayTitle.textContent = `Level ${snap.level}`;

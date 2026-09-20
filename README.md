@@ -1,9 +1,13 @@
 # Breakout 3D — hand-written WebGL2
 
+[![CI](https://github.com/fadhlillah2/breakout-3d-webgl/actions/workflows/ci.yml/badge.svg)](https://github.com/fadhlillah2/breakout-3d-webgl/actions/workflows/ci.yml)
+
 A 3D brick breaker rendered by a small hand-written WebGL2 pipeline.
 No engine, no framework, no runtime dependencies — plain ES modules and GLSL.
 
 **Play:** https://fadhlillah2.github.io/breakout-3d-webgl/
+
+![Breakout 3D](screenshots/breakout-3d.png)
 
 ## Controls
 
@@ -34,13 +38,70 @@ No engine, no framework, no runtime dependencies — plain ES modules and GLSL.
 
 ## Run locally
 
-    python3 -m http.server 8000
-    # open http://localhost:8000
+    npm start
+    # open http://127.0.0.1:8000  (PORT=9000 npm start to move it)
+
+`npm start` serves the folder with the same small Node static server the browser
+tests use — nothing to install, and no Python needed.
+
+## How it works
+
+Four things carry the weight.
+
+- **Matrices by hand.** `src/math.js` builds `perspective` and `lookAt` itself,
+  and `src/camera.js` multiplies them into one view-projection that is cached
+  until the aspect ratio or the camera moves. The eye it owns is read twice a
+  frame: by the view matrix, and by the shader as the origin of the fog.
+- **One shader block.** The hemisphere ambient, directional light, rim term,
+  per-draw fog, `fwidth` floor grid, paddle contact shadow, procedural brick
+  cracks and the ball's own point light all live in a single fragment shader —
+  no second pass, no draw of their own, one program and one cube mesh for every
+  body in the frame — 39 of them on a fresh wall, 46 in the busiest frame the
+  smoke test captures.
+- **Exact contact, adaptive sub-steps.** A frame is advanced in steps no longer
+  than half a ball radius, capped at 16 — a belt the worst legal frame, six
+  steps at the frame-time and speed caps, never reaches. A brick hit is an exact
+  circle-vs-rect contact reflected about its normal, so a ball grazing the seam
+  between two bricks never takes one out from a distance.
+- **Seeded determinism.** Level layouts, capsule drops, serve angles and shard
+  directions all come from a small integer hash of the game state: no
+  `Math.random`, no clock reading anywhere in the simulation. That is what makes
+  the gates possible — Node, headless Chrome and the screenshot replay the same
+  game and compare the same numbers.
+
+Each surface answers the ball differently. The paddle sets the exit angle
+outright from the contact offset (16°–60° off vertical, so the middle of the
+paddle steers as much as the tips do); the side walls and the ceiling flip one
+component and leave the angle alone; and only a brick bounce runs the angle
+clamp, which floors |vy| at 0.9 and then |vx| at 1.2 so the ball can settle into
+neither a horizontal crawl nor a vertical loop.
+
+## The files
+
+- `src/game.js` — the whole simulation: DOM-free, WebGL-free, no clock.
+- `src/math.js`, `src/camera.js` — 4×4 matrices; the camera is the only writer
+  of the eye position, impact shake included.
+- `src/gl.js` + `src/cube.js` — the renderer: one program, one cube mesh.
+- `src/fx.js` — seeded brick shards and the distance-sampled trail, both pure.
+- `src/sfx.js` — sounds synthesised from oscillators, muted state persisted.
+- `src/input.js`, `src/storage.js` — key routing and the two persisted numbers,
+  both kept DOM-free so the rules are testable.
+- `src/main.js` — DOM wiring, pointer/keyboard input, HUD, impact feedback, and
+  the tooling modes. Eight URL parameters: `?autotest=1`, `?shot=1`, `?nogl=1`
+  and `?debug=1` choose a mode; `?ticks=` and `?end=` choose the scenario;
+  `?w=`/`?h=` pin the size of the captured frame. Under `?debug=1` the live game
+  object is hung on `window.__game` — a real handle, not a read-only copy, so a
+  scripted playthrough can drive it.
 
 ## Tests
 
-    npm test                      # node --test: pure game/input/storage logic, no browser
-    npm run smoke                 # Chrome headless + SwiftShader; needs google-chrome
+    npm test                      # node --test, 107 checks, no browser
+    npm run smoke                 # 37 checks in headless Chrome + SwiftShader
+
+`npm test` discovers `test/*.test.mjs` on its own: the simulation, the camera
+and its projection, the shard and trail pools, the synthesised voices, storage,
+key routing, and the markup and CSS invariants that live outside JavaScript.
+`npm run smoke` needs `google-chrome` (or `CHROME=` pointing at one).
 
 `tools/smoke.mjs` drives the page in `?autotest=1` mode (paddle tracking the ball,
 fixed 60 Hz ticks) and compares the DOM status — state, score, HUD text and the
@@ -59,25 +120,16 @@ anti-fabrication guard inspects (a live context that drew nothing is rejected to
 and the whole capture runs twice: the two PNGs must be byte-identical, so "the
 shot mode is frozen" is a gate rather than a claim.
 
-## How it works
+## Accessibility
 
-- `src/game.js` — DOM-free arena on a classic breakout play plane at a fixed
-  depth: adaptive sub-stepping (never more than half a ball radius per step),
-  exact circle-vs-rect brick contact reflected about the contact normal, and a
-  minimum horizontal component after every bounce so the ball can never lock
-  into a vertical loop. Level layouts, capsule drops and serve angles all come
-  from a small integer hash of the game state, so there is no RNG anywhere and
-  the same ticks always replay the same game.
-- `src/gl.js` + `src/cube.js` — one shader program, one cube mesh: a hemisphere
-  ambient over a directional light, a rim term, per-draw distance fog, an
-  `fwidth` floor grid, a contact shadow under the paddle, per-brick cracks, and
-  the ball as a moving point light — all in the one fragment shader, with no
-  second pass and no draw call of their own.
-- `src/camera.js` — the only writer of the eye position, impact shake included;
-  `src/fx.js` — seeded brick shards and the distance-sampled trail, both pure;
-  `src/sfx.js` — sounds synthesised from oscillators, muted state persisted.
-- `src/main.js` — DOM wiring, pointer/keyboard input, HUD, and the
-  `?autotest=1`, `?shot=1`, `?nogl=1` modes used by the tooling.
+- Playable from the keyboard alone: A/D or ← → move, Space/Enter serves, Esc
+  pauses, and every control has a visible focus ring.
+- A permanent `<h1>`, a labelled canvas, and a polite live region that announces
+  a lost life, a new level and the final score.
+- `prefers-reduced-motion` is honoured end to end: the floating score numbers
+  stop flying, and the shake, hit-stop, shards and trail are all switched off.
+- The stage is capped to the viewport and the page still scrolls, so the paddle
+  is never below the fold; on coarse pointers the buttons are at least 44 px.
 
 ## Limitations
 
@@ -91,6 +143,25 @@ shot mode is frozen" is a gate rather than a claim.
 - Requires WebGL2; without it a fallback message is shown.
 - The smoke test runs Chrome with SwiftShader: it verifies correctness, not GPU performance.
 
+## Corrections to earlier commit messages
+
+History is left as it was written; the record is corrected here instead.
+
+- The device-pixel-ratio change is a **cap** — `Math.min(dpr || 1, 1.5)` — not a
+  floor, as its commit message said. What that commit removed was the old 0.75
+  cap that made narrow screens render soft.
+- The screenshot defect was described as a capture-time resize redraw. The part
+  that is certain is narrower: the frame the guard **inspected** was not the
+  frame that reached the **PNG**. `?w`/`?h` now pin one frame for both, and the
+  capture runs twice and must match byte for byte.
+
+## Sibling project
+
+[tower-stack-webgl](https://github.com/fadhlillah2/tower-stack-webgl)
+([play](https://fadhlillah2.github.io/tower-stack-webgl/)) — the same
+dependency-free WebGL2 setup; this repo's first commit vendored its `math.js`,
+`cube.js` and `gl.js` before they grew apart.
+
 ## License
 
-No license file yet — the source is public for review.
+MIT — see [LICENSE](LICENSE).
