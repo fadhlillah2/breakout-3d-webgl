@@ -41,8 +41,11 @@ pindah ke mouse hanya untuk mute.
   runtime `src/main.js:380` dan `:384` (dipaku `test/unit.markup.test.mjs:58-64`) tidak
   berubah karena tidak menyebut daftar kontrol lengkap.
 - T8. Test `keyAction` (`test/unit.input.test.mjs:18-31`, helper `on()` di baris 19)
-  mendapat dua assertion baru mengikuti pola `Escape` di baris 24-25: `KeyM` tanpa
-  repeat menghasilkan `'mute'`, dan `KeyM` dengan `repeat: true` menghasilkan `null`.
+  mendapat minimal dua assertion baru mengikuti pola `Escape` di baris 24-25: `KeyM`
+  tanpa repeat menghasilkan `'mute'`, dan `KeyM` dengan `repeat: true` menghasilkan
+  `null`. plan.md boleh menambah assertion atau test pin lain di berkas yang sama untuk
+  memaku T4 dan T3 (plan.md memilih: assertion target tombol fokus, dan satu test yang
+  membaca `src/main.js` sebagai teks seperti `test/unit.markup.test.mjs:13`).
 
 ## Behavior yang diharapkan
 
@@ -92,9 +95,10 @@ Tiap butir satu pemeriksaan; metode ceknya ditulis di butir itu.
   berkas.
 - AC-7. Hint `index.html:47` menyebut `M` untuk mute di samping `Esc = pause`. Cek: baca
   berkas.
-- AC-8. `npm test` (`node --test`, `package.json:9`) hijau: 0 fail, exit 0, dengan dua
-  assertion baru di test `keyAction`. Baseline terverifikasi di `7064c7e` (diff ke
-  `cb4a54b` hanya menambah intent.md): 107 pass, 0 fail.
+- AC-8. `npm test` (`node --test`, `package.json:9`) hijau: 0 fail, exit 0, dengan
+  assertion baru di test `keyAction` dan test pin plan.md. Baseline terverifikasi di
+  `7064c7e` (diff ke `cb4a54b` hanya menambah intent.md): 107 pass, 0 fail; sesudah
+  implementasi 108 pass (107 + 1 test pin), dan `README.md:98` menyebut angka itu.
 - AC-9. `test/unit.markup.test.mjs` tetap lolos: tiap salinan teks kontrol tetap memuat
   drag/tap/A\/D/arrow (`test/unit.markup.test.mjs:16-27`), jadi penambahan `M = mute`
   tidak melanggarnya. Cek: bagian dari `npm test` (AC-8).
