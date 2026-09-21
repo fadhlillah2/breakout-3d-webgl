@@ -42,8 +42,9 @@ test('a serve key on a focused button is left to the browser', () => {
   assert.equal(keyAction({ code: 'Space', repeat: false, target: null }), 'serve');
 });
 
-test('the mute branch in main.js dispatches toggle + syncMute', () => {
-  const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
-  assert.match(main, /action === 'mute'\)\s*\{[^}]*sfx\.toggle\(\);\s*syncMute\(\);/,
-    'the mute branch calls sfx.toggle() then syncMute()');
+test('the mute branch in main.js toggles, syncs and announces', () => {
+  const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8')
+    .replace(/^\s*\/\/.*$/gm, ''); // a commented-out statement must not satisfy the pin
+  assert.match(main, /action === 'mute'\)\s*\{[^}]*sfx\.toggle\(\);\s*syncMute\(\);\s*if \(document\.activeElement !== muteButton\)\s*\{?\s*announce\.textContent = sfx\.muted \? 'Sound muted\.' : 'Sound on\.';/,
+    'the mute branch calls sfx.toggle() then syncMute() then writes #announce unless #mute has focus');
 });
