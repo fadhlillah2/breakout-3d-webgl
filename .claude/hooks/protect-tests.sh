@@ -5,7 +5,7 @@ IN=$(cat)
 PHASE_FILE="${CLAUDE_PROJECT_DIR:-.}/.claude/sdlc-phase"
 [ -f "$PHASE_FILE" ] && [ "$(cat "$PHASE_FILE")" = "fix" ] || exit 0
 TOOL=$(printf '%s' "$IN" | jq -r '.tool_name // ""')
-POLA='(^|/)(test|tests|__tests__|spec)/|_test\.|\.test\.|\.spec\.|_spec\.|(^|/)test_|(^|/)conftest\.py'
+POLA='(^|[^A-Za-z0-9_.-])(test|tests|__tests__|spec)/|_test\.|\.test\.|\.spec\.|_spec\.|(^|[^A-Za-z0-9_.-])test_|(^|[^A-Za-z0-9_.-])conftest\.py'
 if [ "$TOOL" = "Bash" ]; then
   CMD=$(printf '%s' "$IN" | jq -r '.tool_input.command // ""')
   if printf '%s' "$CMD" | grep -Eq "$POLA" && printf '%s' "$CMD" | grep -Eq 'sed -i|>>?|\btee\b|\bmv\b|\bcp\b|\brm\b|\bpatch\b|git (checkout|restore)|truncate'; then
