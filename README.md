@@ -123,8 +123,8 @@ shot mode is frozen" is a gate rather than a claim.
 
 ## Accessibility
 
-- Playable from the keyboard alone: A/D or ← → move, Space/Enter serves, Esc
-  pauses, M mutes, and every control has a visible focus ring.
+- Playable from the keyboard alone: A/D or ← → move, Space/Enter serves,
+  Esc or P pauses, M mutes, and every control has a visible focus ring.
 - A permanent `<h1>`, a labelled canvas, and a polite live region that announces
   a lost life, a new level, the final score, and a keyboard mute toggle.
 - `prefers-reduced-motion` is honoured end to end: the floating score numbers
