@@ -126,7 +126,7 @@ shot mode is frozen" is a gate rather than a claim.
 - Playable from the keyboard alone: A/D or ← → move, Space/Enter serves, Esc
   pauses, M mutes, and every control has a visible focus ring.
 - A permanent `<h1>`, a labelled canvas, and a polite live region that announces
-  a lost life, a new level and the final score.
+  a lost life, a new level, the final score, and a keyboard mute toggle.
 - `prefers-reduced-motion` is honoured end to end: the floating score numbers
   stop flying, and the shake, hit-stop, shards and trail are all switched off.
 - The stage is capped to the viewport and the page still scrolls, so the paddle
