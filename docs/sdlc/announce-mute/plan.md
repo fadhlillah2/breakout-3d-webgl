@@ -205,5 +205,28 @@ test('the mute branch in main.js toggles, syncs and announces', () => {
 - Keluaran `npm test` merah (harus 107 pass, 1 fail, `ERR_ASSERTION` pada test pin):
 
 ```
-<tempel keluaran di sini>
+# Subtest: the mute branch in main.js toggles, syncs and announces
+not ok 85 - the mute branch in main.js toggles, syncs and announces
+  ---
+  duration_ms: 7.566941
+  location: '/home/finskor017/Documents/PROJECTS/breakout-3d-webgl/test/unit.input.test.mjs:45:1'
+  failureType: 'testCodeFailure'
+  error: 'the mute branch calls sfx.toggle() then syncMute() then writes #announce unless #mute has focus'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  ...
+[dipotong: diagnostik expected/actual = dump teks src/main.js +-600 baris]
+1..108
+# tests 108
+# suites 0
+# pass 107
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 653.73186
 ```
+
+  Exit 1; stdout `npm test` penuh 1169 baris - dipotong ke blok kegagalan + ringkasan.
+  `node --test test/unit.input.test.mjs` juga merah: 3 pass, 1 fail, `ERR_ASSERTION`
+  yang sama, exit 1 (node v20.19.6, dijalankan sebelum `src/main.js` disentuh).
