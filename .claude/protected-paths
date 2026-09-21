@@ -1,0 +1,6 @@
+# Path yang worker SDLC tidak boleh ubah (glob relatif root; hook .claude/hooks/protect-paths.sh).
+# Rantai yang sudah ditutup = catatan audit.
+docs/sdlc/mute-key/**
+docs/sdlc/announce-mute/**
+docs/sdlc/probe-par/**
+docs/sdlc/probe-par-fix/**
