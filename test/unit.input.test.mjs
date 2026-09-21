@@ -35,6 +35,21 @@ test('keyAction routes each key to the action main.js applies', () => {
   assert.equal(on('ArrowRight'), 'right');
   assert.equal(on('KeyD'), 'right');
   assert.equal(on('KeyB'), null);
+  // Ctrl/Meta/Alt combos are the browser's (print, tab, menus), never ours.
+  const actionKeys = ['Space', 'Enter', 'NumpadEnter', 'Escape', 'KeyP', 'KeyM'];
+  for (const modifier of ['ctrlKey', 'metaKey', 'altKey']) {
+    for (const code of actionKeys) {
+      assert.equal(on(code, { [modifier]: true }), null, `${modifier}+${code} is not an action`);
+    }
+  }
+  // Shift is not a modifier: it is ordinary typing, not a browser shortcut.
+  assert.equal(on('Space', { shiftKey: true }), 'serve');
+  assert.equal(on('Escape', { shiftKey: true }), 'pause');
+  assert.equal(on('KeyP', { shiftKey: true }), 'pause');
+  assert.equal(on('KeyM', { shiftKey: true }), 'mute');
+  // The paddle stays modifier-blind: a held Ctrl+A still steers.
+  assert.equal(on('ArrowLeft', { ctrlKey: true }), 'left');
+  assert.equal(on('KeyD', { metaKey: true }), 'right');
 });
 
 test('a serve key on a focused button is left to the browser', () => {
@@ -42,6 +57,10 @@ test('a serve key on a focused button is left to the browser', () => {
   assert.equal(keyAction({ code: 'Space', repeat: false, target: button }), 'native');
   assert.equal(keyAction({ code: 'Space', repeat: false, target: { closest: () => null } }), 'serve');
   assert.equal(keyAction({ code: 'Space', repeat: false, target: null }), 'serve');
+  for (const code of ['Space', 'Enter', 'NumpadEnter']) {
+    assert.equal(keyAction({ code, repeat: false, target: button, ctrlKey: true }), null,
+      'a browser shortcut never becomes a native button activation');
+  }
 });
 
 test('the mute branch in main.js toggles, syncs and announces', () => {
