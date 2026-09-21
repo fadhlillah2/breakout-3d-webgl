@@ -377,7 +377,7 @@ function start(renderer) {
     pauseButton.setAttribute('aria-pressed', String(snap.state === 'paused'));
     if (snap.state === 'paused') {
       overlayTitle.textContent = 'Paused';
-      overlayText.textContent = 'Press Esc, or click or tap the button, to resume.';
+      overlayText.textContent = 'Press Esc or P, or click or tap the button, to resume.';
       overlayButton.textContent = 'Resume';
     } else if (snap.state === 'over') {
       overlayTitle.textContent = `Game over — score ${snap.score}`;
