@@ -13,7 +13,7 @@ No engine, no framework, no runtime dependencies — plain ES modules and GLSL.
 
 - Move the paddle: mouse / touch drag, or ← → (A/D)
 - Serve: Space / Enter / click / tap
-- Pause: Esc
+- Pause: Esc or P
 - Mute: M
 - After a game over, the serve input restarts
 
