@@ -457,7 +457,10 @@ function start(renderer) {
     if (action === 'serve') { event.preventDefault(); primaryAction(); }
     else if (action === 'pause') togglePause();
     else if (action === 'left' || action === 'right') { event.preventDefault(); held[action] = true; }
-    else if (action === 'mute') { sfx.toggle(); syncMute(); }
+    else if (action === 'mute') {
+      sfx.toggle(); syncMute();
+      if (document.activeElement !== muteButton) announce.textContent = sfx.muted ? 'Sound muted.' : 'Sound on.';
+    }
   });
   window.addEventListener('keyup', (event) => {
     if (isLeftKey(event)) held.left = false;
