@@ -1,17 +1,24 @@
 // Keyboard policy for the game, kept DOM-free so Node tests can pin the rules:
 // serve/pause/mute never auto-repeat, paddle keys are held (repeat is fine).
+// a Ctrl/Meta/Alt action key is the browser's, not ours.
+
+// Ctrl/Meta/Alt combos belong to the browser (print, tab, menus). Shift is not a
+// modifier here: Shift+Space still serves.
+function isModified(event) {
+  return Boolean(event.ctrlKey || event.metaKey || event.altKey);
+}
 
 function isServeKey(event) {
-  if (event.repeat) return false;
+  if (event.repeat || isModified(event)) return false;
   return event.code === 'Space' || event.code === 'Enter' || event.code === 'NumpadEnter';
 }
 
 function isPauseKey(event) {
-  return !event.repeat && (event.code === 'Escape' || event.code === 'KeyP');
+  return !event.repeat && !isModified(event) && (event.code === 'Escape' || event.code === 'KeyP');
 }
 
 function isMuteKey(event) {
-  return !event.repeat && event.code === 'KeyM';
+  return !event.repeat && !isModified(event) && event.code === 'KeyM';
 }
 
 export function isLeftKey(event) {
