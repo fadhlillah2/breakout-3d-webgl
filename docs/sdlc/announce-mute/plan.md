@@ -155,8 +155,8 @@ test('the mute branch in main.js toggles, syncs and announces', () => {
      butuh Chrome; CI `.github/workflows/ci.yml:24-27` menjalankan `npm test` lalu
      `npm run smoke`).
   3. `git diff --name-only` → persis `README.md`, `src/main.js`,
-     `test/unit.input.test.mjs`; `git status --short` juga menampilkan
-     `?? docs/sdlc/announce-mute/plan.md`.
+     `test/unit.input.test.mjs`; `docs/sdlc/announce-mute/plan.md` ikut di
+     rentang commit hanya untuk blok "Bukti merah" (plan.md tracked sejak commit basis).
   4. `git diff src/main.js` → hanya cabang mute (AC-5). `grep -n announce src/main.js` →
      tepat satu kemunculan baru, dan ia di dalam cabang mute (di antara
      `action === 'mute'` dan akhir handler `keydown`); kemunculan lain tetap yang sudah
@@ -195,7 +195,8 @@ test('the mute branch in main.js toggles, syncs and announces', () => {
    108/0/exit 0; di jendela Task 1 suite merah 107/1 sebagai bukti pin mengikat).
 2. `npm run smoke` → exit 0, "all smoke checks passed" (baseline terukur exit 0; smoke
    tidak menekan `M`).
-3. `git diff --name-only` → tiga berkas implementasi saja; `plan.md` untracked terpisah.
+3. `git diff <base>..HEAD --name-only` → tiga berkas implementasi plus `plan.md` (hanya blok
+   "Bukti merah"; plan.md tracked sejak commit basis).
 4. Pemetaan acceptance: AC-1 → Task 1 + Task 2; AC-2 → Task 2; AC-3 → Task 2/4 (checklist
    review); AC-4, AC-5 → Task 4 butir 4; AC-6 → Task 4 butir 3; AC-7 → Task 3; AC-8 →
    Task 4 butir 2.
@@ -209,7 +210,7 @@ test('the mute branch in main.js toggles, syncs and announces', () => {
 not ok 85 - the mute branch in main.js toggles, syncs and announces
   ---
   duration_ms: 7.566941
-  location: '/home/finskor017/Documents/PROJECTS/breakout-3d-webgl/test/unit.input.test.mjs:45:1'
+  location: 'test/unit.input.test.mjs:45:1'
   failureType: 'testCodeFailure'
   error: 'the mute branch calls sfx.toggle() then syncMute() then writes #announce unless #mute has focus'
   code: 'ERR_ASSERTION'
