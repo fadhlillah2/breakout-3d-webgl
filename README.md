@@ -13,7 +13,7 @@ No engine, no framework, no runtime dependencies — plain ES modules and GLSL.
 
 - Move the paddle: mouse / touch drag, or ← → (A/D)
 - Serve: Space / Enter / click / tap
-- Pause: Esc
+- Pause: Esc or P
 - Mute: M
 - After a game over, the serve input restarts
 
@@ -123,8 +123,8 @@ shot mode is frozen" is a gate rather than a claim.
 
 ## Accessibility
 
-- Playable from the keyboard alone: A/D or ← → move, Space/Enter serves, Esc
-  pauses, M mutes, and every control has a visible focus ring.
+- Playable from the keyboard alone: A/D or ← → move, Space/Enter serves,
+  Esc or P pauses, M mutes, and every control has a visible focus ring.
 - A permanent `<h1>`, a labelled canvas, and a polite live region that announces
   a lost life, a new level, the final score, and a keyboard mute toggle.
 - `prefers-reduced-motion` is honoured end to end: the floating score numbers
