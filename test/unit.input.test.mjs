@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { isLeftKey, isRightKey, keyAction } from '../src/input.js';
 
 test('paddle keys: arrows and A/D, repeat allowed (held keys)', () => {
@@ -39,4 +40,10 @@ test('a serve key on a focused button is left to the browser', () => {
   assert.equal(keyAction({ code: 'Space', repeat: false, target: button }), 'native');
   assert.equal(keyAction({ code: 'Space', repeat: false, target: { closest: () => null } }), 'serve');
   assert.equal(keyAction({ code: 'Space', repeat: false, target: null }), 'serve');
+});
+
+test('the mute branch in main.js dispatches toggle + syncMute', () => {
+  const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  assert.match(main, /action === 'mute'\)\s*\{[^}]*sfx\.toggle\(\);\s*syncMute\(\);/,
+    'the mute branch calls sfx.toggle() then syncMute()');
 });
