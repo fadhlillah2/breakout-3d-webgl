@@ -7,7 +7,7 @@ function isServeKey(event) {
 }
 
 function isPauseKey(event) {
-  return !event.repeat && event.code === 'Escape';
+  return !event.repeat && (event.code === 'Escape' || event.code === 'KeyP');
 }
 
 function isMuteKey(event) {

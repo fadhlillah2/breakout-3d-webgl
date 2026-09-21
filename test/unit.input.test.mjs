@@ -24,6 +24,8 @@ test('keyAction routes each key to the action main.js applies', () => {
   assert.equal(on('Space', { repeat: true }), null, 'auto-repeat never re-serves');
   assert.equal(on('Escape'), 'pause');
   assert.equal(on('Escape', { repeat: true }), null, 'a held Escape never re-pauses');
+  assert.equal(on('KeyP'), 'pause');
+  assert.equal(on('KeyP', { repeat: true }), null, 'a held P never re-pauses');
   assert.equal(on('KeyM'), 'mute');
   assert.equal(on('KeyM', { repeat: true }), null, 'a held M never re-toggles mute');
   assert.equal(on('KeyM', { target: { closest: () => ({}) } }), 'mute',
