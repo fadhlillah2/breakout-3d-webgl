@@ -14,6 +14,7 @@ No engine, no framework, no runtime dependencies — plain ES modules and GLSL.
 - Move the paddle: mouse / touch drag, or ← → (A/D)
 - Serve: Space / Enter / click / tap
 - Pause: Esc
+- Mute: M
 - After a game over, the serve input restarts
 
 ## Rules
@@ -95,7 +96,7 @@ neither a horizontal crawl nor a vertical loop.
 
 ## Tests
 
-    npm test                      # node --test, 107 checks, no browser
+    npm test                      # node --test, 108 checks, no browser
     npm run smoke                 # 37 checks in headless Chrome + SwiftShader
 
 `npm test` discovers `test/*.test.mjs` on its own: the simulation, the camera
@@ -123,7 +124,7 @@ shot mode is frozen" is a gate rather than a claim.
 ## Accessibility
 
 - Playable from the keyboard alone: A/D or ← → move, Space/Enter serves, Esc
-  pauses, and every control has a visible focus ring.
+  pauses, M mutes, and every control has a visible focus ring.
 - A permanent `<h1>`, a labelled canvas, and a polite live region that announces
   a lost life, a new level and the final score.
 - `prefers-reduced-motion` is honoured end to end: the floating score numbers
