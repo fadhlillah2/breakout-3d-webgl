@@ -22,11 +22,12 @@ Rujukan intent: docs/sdlc/probe-gates/intent.md - Status penerimaan: diterima le
 ## Kekhawatiran
 - Menghapus data pemain tanpa kebijakan tertulis soal data lokal.
   Pemilik kebijakan: tidak tertulis
-  Resolusi: belum diputuskan
+  Resolusi: diputuskan lead 2026-09-22 - tanpa kebijakan data lokal tertulis, satu konfirmasi
+  sebelum menghapus cukup dan penghapusan disebut di README Controls.
 
 Kelas risiko: tidak ada
 
 ## Asumsi dan pertanyaan terbuka
 - Konfirmasi memakai `window.confirm` (diputuskan di intent).
 
-Status penerimaan: diterima lead (probe gate) 2026-09-22T11:10:26+07:00 sha256:2c8bf78c.
+Status penerimaan: diterima lead (probe gate, terima ulang) 2026-09-22T11:21:10+07:00 sha256:23f38cec.
